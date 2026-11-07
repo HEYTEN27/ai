@@ -25,7 +25,9 @@ def _load_dotenv(path: Path) -> None:
     """
     if not path.exists():
         return
-    for line in path.read_text(encoding="utf-8").splitlines():
+    # utf-8-sig: Блокнот в Windows любит дописывать в начало невидимый символ BOM,
+    # из-за которого первая переменная в файле не распознаётся. Этот режим его отбрасывает.
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -38,6 +40,9 @@ _load_dotenv(PROJECT_ROOT / ".env")
 
 @dataclass(frozen=True)
 class Settings:
+    # Имя ассистента: так он представляется и так подписан интерфейс
+    assistant_name: str = field(default_factory=lambda: os.getenv("ASSISTANT_NAME", "Джарвис"))
+
     # Какой движок моделей использовать: "ollama" (основной) или "llamacpp"
     llm_backend: str = field(default_factory=lambda: os.getenv("LLM_BACKEND", "ollama"))
 

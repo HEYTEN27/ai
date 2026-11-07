@@ -35,6 +35,7 @@ from ..config import settings
 from ..llm import LLMError, get_backend
 from . import repository as repo
 from .context import build_messages
+from .prompts import default_system_prompt
 
 router = APIRouter(prefix="/api/conversations", tags=["chat"])
 
@@ -132,7 +133,11 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             raise LLMError(f"«{model}» — модель эмбеддингов, она не умеет вести диалог. Выберите другую.")
         think_param = think if (info is not None and info.supports_thinking) else None
 
-        messages = build_messages(repo.list_messages(conv_id), num_ctx=settings.num_ctx)
+        messages = build_messages(
+            repo.list_messages(conv_id),
+            num_ctx=settings.num_ctx,
+            system_prompt=default_system_prompt(model),
+        )
         yield _sse("start", {"model": model, "think": bool(think_param)})
 
         stats = None

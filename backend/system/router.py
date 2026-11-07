@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api", tags=["system"])
 @router.get("/health")
 async def health():
     backend = get_backend()
-    return {"backend": backend.name, **(await backend.health())}
+    return {"backend": backend.name, "assistant_name": settings.assistant_name, **(await backend.health())}
 
 
 @router.get("/models")

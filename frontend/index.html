@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Локальный ассистент</title>
+  <title>Джарвис</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%237c9cff'/><circle cx='11' cy='14' r='2.5' fill='%23171717'/><circle cx='21' cy='14' r='2.5' fill='%23171717'/><rect x='10' y='20' width='12' height='2.5' rx='1.2' fill='%23171717'/></svg>">
   <!-- Все библиотеки лежат локально в vendor/ — интерфейс работает без интернета -->
   <link rel="stylesheet" href="vendor/highlight-github-dark.min.css">
@@ -16,7 +16,7 @@
       <div class="sidebar-top">
         <div class="brand">
           <span class="brand-logo" aria-hidden="true"></span>
-          <span>Ассистент</span>
+          <span id="assistant-name">Джарвис</span>
         </div>
         <button class="btn btn-new" id="new-chat-btn" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -59,7 +59,7 @@
 
       <section class="messages" id="messages" aria-live="polite">
         <div class="empty" id="empty-state">
-          <h1>Чем помочь?</h1>
+          <h1 id="greeting">Джарвис на связи. Чем помочь?</h1>
           <p>Всё работает на вашем компьютере — данные никуда не уходят.</p>
           <div class="suggestions">
             <button type="button" class="suggestion">Объясни, как работает async/await в JavaScript</button>

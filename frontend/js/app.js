@@ -351,11 +351,20 @@ async function checkHealth() {
   try {
     const health = await api.health();
     renderConnection(health);
+    applyAssistantName(health.assistant_name);
     return health.ok;
   } catch {
     renderConnection({ ok: false });
     return false;
   }
+}
+
+/** Подставляет имя ассистента (из настроек сервера) в заголовок, логотип и приветствие. */
+function applyAssistantName(name) {
+  if (!name) return;
+  document.title = name;
+  $("assistant-name").textContent = name;
+  $("greeting").textContent = `${name} на связи. Чем помочь?`;
 }
 
 function escapeHtml(s) {

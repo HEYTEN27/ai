@@ -22,7 +22,9 @@ def _send(client, conv_id, content, **kwargs):
 
 def test_health(client):
     data = client.get("/api/health").json()
-    assert data == {"backend": "ollama", "ok": True, "version": "0.34.4-fake", "error": None}
+    assert data == {
+        "backend": "ollama", "assistant_name": "Джарвис", "ok": True, "version": "0.34.4-fake", "error": None,
+    }
 
 
 def test_models_list(client):
@@ -93,8 +95,8 @@ def test_history_is_sent_to_model(client):
     _send(client, conv_id, "Первый вопрос")
     _send(client, conv_id, "Второй вопрос")
     sent = fake_ollama.state["last_request"]["messages"]
-    assert [m["role"] for m in sent] == ["user", "assistant", "user"]
-    assert sent[0]["content"] == "Первый вопрос"
+    assert [m["role"] for m in sent] == ["system", "user", "assistant", "user"]
+    assert sent[1]["content"] == "Первый вопрос"
     # Название диалога задаётся только первым сообщением
     assert client.get(f"/api/conversations/{conv_id}").json()["title"] == "Первый вопрос"
 
@@ -136,6 +138,16 @@ def test_regenerate(client):
     msgs = client.get(f"/api/conversations/{conv_id}").json()["messages"]
     assert [m["role"] for m in msgs] == ["user", "assistant"], "старый ответ заменяется новым"
     assert msgs[1]["model"] == "llama3.1:8b"
+
+
+def test_system_prompt_has_name_and_model(client):
+    """Модель получает системный промпт с именем «Джарвис» и честным названием своей модели."""
+    conv_id = _new_conv(client)
+    _send(client, conv_id, "Как тебя зовут?", model="llama3.1:8b")
+    system = fake_ollama.state["last_request"]["messages"][0]
+    assert system["role"] == "system"
+    assert "Тебя зовут Джарвис" in system["content"]
+    assert "llama3.1:8b" in system["content"]
 
 
 # ---------- ошибки ----------
