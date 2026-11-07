@@ -25,15 +25,22 @@ GB = 1024**3
 MODELS = {
     "qwen3:8b": {
         "family": "qwen3", "parameter_size": "8.2B", "quantization_level": "Q4_K_M",
-        "size": int(5.2 * GB), "capabilities": ["completion", "tools", "thinking"], "gpu_share": 1.0,
+        "size": 5_225_388_164, "capabilities": ["completion", "tools", "thinking"], "gpu_share": 1.0,
+        "arch": {"general.architecture": "qwen3", "qwen3.block_count": 36, "qwen3.attention.head_count_kv": 8,
+                 "qwen3.attention.key_length": 128, "qwen3.attention.value_length": 128},
     },
     "llama3.1:8b": {
         "family": "llama", "parameter_size": "8.0B", "quantization_level": "Q4_K_M",
         "size": int(4.9 * GB), "capabilities": ["completion", "tools"], "gpu_share": 1.0,
+        # У llama длины K/V не указаны — проверяем запасную формулу «эмбеддинг / головы»
+        "arch": {"general.architecture": "llama", "llama.block_count": 32, "llama.attention.head_count_kv": 8,
+                 "llama.embedding_length": 4096, "llama.attention.head_count": 32},
     },
     "qwen3:14b": {
         "family": "qwen3", "parameter_size": "14.8B", "quantization_level": "Q4_K_M",
         "size": int(9.3 * GB), "capabilities": ["completion", "tools", "thinking"], "gpu_share": 0.62,
+        "arch": {"general.architecture": "qwen3", "qwen3.block_count": 40, "qwen3.attention.head_count_kv": 8,
+                 "qwen3.attention.key_length": 128, "qwen3.attention.value_length": 128},
     },
     "bge-m3:latest": {
         "family": "bert", "parameter_size": "566.70M", "quantization_level": "F16",
@@ -79,7 +86,8 @@ async def show(request: Request):
     name = (await request.json()).get("model")
     if name not in MODELS:
         return JSONResponse({"error": f"model '{name}' not found"}, status_code=404)
-    return {"capabilities": MODELS[name]["capabilities"], "details": {"family": MODELS[name]["family"]}}
+    m = MODELS[name]
+    return {"capabilities": m["capabilities"], "details": {"family": m["family"]}, "model_info": m.get("arch", {})}
 
 
 @app.get("/api/ps")
@@ -157,3 +165,9 @@ async def chat(request: Request):
                 state["closed_early"] += 1
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")
+
+
+@app.get("/_test/last_request")
+async def test_last_request():
+    """Только для тестов: что последним прислал наш сервер (промпт, параметры генерации)."""
+    return state["last_request"] or {}

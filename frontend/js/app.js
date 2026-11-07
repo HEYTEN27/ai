@@ -14,7 +14,9 @@ import {
   hideAllRetryButtons,
   removeLastAssistantMessage,
   renderHistory,
+  setPersonaLookup,
 } from "./chat.js";
+import { initSettings } from "./settings.js";
 import { renderConversationList } from "./sidebar.js";
 import {
   fillModelSelect,
@@ -29,6 +31,8 @@ const state = {
   conversations: [], // список диалогов для боковой панели
   activeId: null, // открытый диалог (null = новый, ещё не созданный)
   models: new Map(), // скачанные модели по имени
+  personas: [], // персоны (учитель, программист...)
+  defaultPersonaId: null, // персона для новых чатов (из настроек)
   abortController: null, // не null, пока идёт генерация (для кнопки «Стоп»)
   lastStatus: null,
 };
@@ -38,6 +42,7 @@ const $ = (id) => document.getElementById(id);
 const input = $("input");
 const sendBtn = $("send-btn");
 const modelSelect = $("model-select");
+const personaSelect = $("persona-select");
 const thinkToggle = $("think-toggle");
 const thinkWrap = $("think-toggle-wrap");
 
@@ -105,6 +110,48 @@ modelSelect.addEventListener("change", async () => {
   }
 });
 
+// =====================================================================
+// Персоны
+// =====================================================================
+
+async function loadPersonas() {
+  try {
+    const [personas, settings] = await Promise.all([api.listPersonas(), api.getSettings()]);
+    state.personas = personas;
+    state.defaultPersonaId = settings.values.default_persona_id ?? personas[0]?.id ?? null;
+  } catch {
+    state.personas = [];
+  }
+  const previous = personaSelect.value;
+  personaSelect.innerHTML = "";
+  for (const p of state.personas) {
+    const opt = new Option(`${p.icon} ${p.name}`, p.id);
+    opt.title = p.description;
+    personaSelect.append(opt);
+  }
+  // Оставляем выбранную персону, если она ещё существует
+  setPersonaSelect(previous ? Number(previous) : state.defaultPersonaId);
+}
+
+function setPersonaSelect(id) {
+  const exists = state.personas.some((p) => p.id === id);
+  personaSelect.value = exists ? id : (state.defaultPersonaId ?? "");
+}
+
+function selectedPersonaId() {
+  return personaSelect.value ? Number(personaSelect.value) : null;
+}
+
+// Под ответом показываем, какой персоной он написан
+setPersonaLookup((id) => state.personas.find((p) => p.id === id));
+
+personaSelect.addEventListener("change", async () => {
+  // В открытом диалоге запоминаем персону на сервере; для нового чата она применится при создании
+  if (state.activeId) {
+    await api.updateConversation(state.activeId, { persona_id: selectedPersonaId() }).catch(() => {});
+  }
+});
+
 thinkToggle.checked = prefs.get("think", false);
 thinkToggle.addEventListener("change", () => prefs.set("think", thinkToggle.checked));
 
@@ -138,6 +185,7 @@ async function openConversation(id) {
     const conv = await api.getConversation(id);
     state.activeId = conv.id;
     setHash(conv.id);
+    setPersonaSelect(conv.persona_id ?? state.defaultPersonaId);
     if (conv.model && state.models.has(conv.model)) {
       modelSelect.value = conv.model;
       updateThinkToggle();
@@ -157,6 +205,7 @@ function newChat() {
   if (state.abortController) stopGeneration();
   state.activeId = null;
   setHash(null);
+  setPersonaSelect(state.defaultPersonaId);
   clearMessages();
   refreshConversations();
   closeSidebar();
@@ -190,7 +239,7 @@ async function sendMessage(text) {
   // Новый диалог создаём на сервере только при первом сообщении
   if (!state.activeId) {
     try {
-      const conv = await api.createConversation({ model });
+      const conv = await api.createConversation({ model, persona_id: selectedPersonaId() });
       state.activeId = conv.id;
       setHash(conv.id);
     } catch (e) {
@@ -379,8 +428,21 @@ function escapeHtml(s) {
 
 async function init() {
   const ok = await checkHealth();
-  await loadModels();
+  await Promise.all([loadModels(), loadPersonas()]);
   await refreshConversations();
+
+  initSettings({
+    getModels: () => state.models,
+    getPersonas: () => state.personas,
+    // После сохранения настроек: новое имя, список персон, модель по умолчанию
+    onSaved: async () => {
+      await Promise.all([checkHealth(), loadPersonas()]);
+      if (state.activeId) {
+        const conv = await api.getConversation(state.activeId).catch(() => null);
+        if (conv) setPersonaSelect(conv.persona_id ?? state.defaultPersonaId);
+      }
+    },
+  });
 
   const id = idFromHash();
   if (id) await openConversation(id);

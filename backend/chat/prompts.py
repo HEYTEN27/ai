@@ -1,31 +1,60 @@
 """
-Системный промпт — «инструкция-характер», которая уходит в модель первым сообщением
-(роль system) перед всей историей диалога. Модель её не показывает, но следует ей.
+Сборка системного промпта — «инструкции-характера», которая уходит в модель
+первым сообщением (роль system) перед всей историей диалога.
 
-Без него Qwen3 представляется как «Qwen от Alibaba Cloud». Здесь мы сообщаем
-модели её имя и общие правила поведения.
+Итоговый промпт = общий промпт из настроек (имя, правила)
+                 + инструкция выбранной персоны (учитель, программист...).
 
-На этапе 2 текст станет редактируемым в интерфейсе и появятся «персоны»
-(учитель, программист, редактор). Этот промпт останется вариантом по умолчанию.
+В тексте можно использовать подстановки:
+  {name}  — имя ассистента (Джарвис)
+  {model} — модель, которая сейчас отвечает (qwen3:8b)
+  {date}  — сегодняшняя дата словами (модель сама не знает, какой сегодня день)
 """
 
-from ..config import settings
+import re
+from datetime import datetime
 
-DEFAULT_SYSTEM_PROMPT = """\
-Тебя зовут {name}. Ты — личный ИИ-ассистент пользователя и работаешь локально \
-на его компьютере, поэтому всё, что он пишет, остаётся у него.
+MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+          "августа", "сентября", "октября", "ноября", "декабря"]
+WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
 
-Ты помогаешь с учёбой, программированием, текстами и повседневными задачами.
-
-Правила:
-- Отвечай на языке пользователя (по умолчанию — на русском).
-- Пиши по делу, без воды. Сложное объясняй простыми словами и на примерах.
-- Код оформляй в markdown-блоках с указанием языка.
-- Если не знаешь ответа или не уверен — честно скажи об этом, не выдумывай.
-- Представляйся как {name}. Если спросят, на какой модели ты работаешь, \
-честно ответь: на открытой модели {model}, запущенной локально."""
+PLACEHOLDERS = ("name", "model", "date")
 
 
-def default_system_prompt(model: str) -> str:
-    """Системный промпт по умолчанию с подставленными именем ассистента и моделью."""
-    return DEFAULT_SYSTEM_PROMPT.format(name=settings.assistant_name, model=model)
+def today_text(now: datetime | None = None) -> str:
+    """«7 ноября 2026 года, суббота» — по часам компьютера пользователя."""
+    now = now or datetime.now()
+    return f"{now.day} {MONTHS[now.month - 1]} {now.year} года, {WEEKDAYS[now.weekday()]}"
+
+
+def render(template: str, values: dict) -> str:
+    """Подставляет {name}, {model}, {date}.
+
+    Не используем str.format: пользователь может написать в промпте фигурные скобки
+    (например, пример кода на JS), и format упал бы с ошибкой. Здесь заменяются
+    только известные подстановки, всё остальное остаётся как есть.
+    """
+    pattern = r"\{(" + "|".join(PLACEHOLDERS) + r")\}"
+    return re.sub(pattern, lambda m: str(values.get(m.group(1), m.group(0))), template)
+
+
+def build_system_prompt(settings: dict, persona: dict | None, model: str) -> str:
+    values = {"name": settings["assistant_name"], "model": model, "date": today_text()}
+    parts = [render(settings["system_prompt"], values).strip()]
+    if persona and persona.get("prompt", "").strip():
+        parts.append(render(persona["prompt"], values).strip())
+    return "\n\n".join(p for p in parts if p)
+
+
+def generation_options(settings: dict, persona: dict) -> dict:
+    """Параметры генерации для Ollama: из персоны + размер контекста из общих настроек."""
+    options = {
+        "num_ctx": settings["num_ctx"],
+        "temperature": persona["temperature"],
+        "top_p": persona["top_p"],
+        "top_k": persona["top_k"],
+        "repeat_penalty": persona["repeat_penalty"],
+    }
+    if persona.get("num_predict"):
+        options["num_predict"] = persona["num_predict"]
+    return options

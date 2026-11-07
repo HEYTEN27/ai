@@ -6,6 +6,12 @@ import { copyText, enhanceCodeBlocks, renderMarkdown } from "./markdown.js";
 
 const messagesEl = () => document.getElementById("messages");
 
+// Функция «id персоны → персона». Задаётся из app.js, где хранится список персон.
+let personaLookup = () => null;
+export function setPersonaLookup(fn) {
+  personaLookup = fn;
+}
+
 const ICONS = {
   copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
   retry: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
@@ -46,9 +52,11 @@ export function addUserMessage(text) {
   return msg;
 }
 
-/** Текст под ответом: «qwen3:8b · 42 ток/с · 128 токенов». */
+/** Текст под ответом: «💻 Программист · qwen3:8b · 42 ток/с · 128 ток.». */
 function metaText(message) {
   const parts = [];
+  const persona = message.persona_id ? personaLookup(message.persona_id) : null;
+  if (persona) parts.push(`${persona.icon} ${persona.name}`);
   if (message.model) parts.push(message.model);
   const s = message.stats;
   if (s?.tokens_per_second) parts.push(`${s.tokens_per_second} ток/с`);

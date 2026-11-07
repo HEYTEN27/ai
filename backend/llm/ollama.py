@@ -18,7 +18,15 @@ from typing import AsyncIterator
 
 import httpx
 
-from .base import ChatChunk, LLMBackend, LLMError, LoadedModel, ModelInfo, parse_parameter_size
+from .base import (
+    ChatChunk,
+    LLMBackend,
+    LLMError,
+    LoadedModel,
+    ModelInfo,
+    kv_bytes_per_token,
+    parse_parameter_size,
+)
 
 # Таймауты: подключиться надо быстро, а вот первый токен может прийти нескоро —
 # Ollama сначала загружает модель с диска в видеопамять (5 ГБ — это 10–30 секунд).
@@ -38,8 +46,9 @@ class OllamaBackend(LLMBackend):
         self.keep_alive = keep_alive
         # transport можно подменить в тестах на эмулятор Ollama
         self._client = httpx.AsyncClient(base_url=self.base_url, timeout=TIMEOUT, transport=transport)
-        # Кэш ответов /api/show: ключ — digest (хэш файла модели), он меняется при обновлении модели
-        self._show_cache: dict[str, list[str]] = {}
+        # Кэш ответов /api/show: ключ — digest (хэш файла модели), он меняется при обновлении модели.
+        # Значение — (возможности модели, байт KV-кэша на токен)
+        self._show_cache: dict[str, tuple[list[str], int | None]] = {}
 
     # ---------- служебное ----------
 
@@ -64,15 +73,21 @@ class OllamaBackend(LLMBackend):
         except httpx.HTTPError:
             return {"ok": False, "version": None, "error": str(self._connection_error())}
 
-    async def _capabilities(self, name: str, digest: str | None, details: dict) -> list[str]:
-        """Возможности модели из /api/show (с кэшем). Если не получилось — угадываем по названию."""
+    async def _show(self, name: str, digest: str | None, details: dict) -> tuple[list[str], int | None]:
+        """Подробности о модели из /api/show (с кэшем): что умеет и сколько весит токен контекста.
+
+        Если /api/show не ответил — угадываем возможности по названию.
+        """
         if digest and digest in self._show_cache:
             return self._show_cache[digest]
         caps: list[str] = []
+        kv = None
         try:
             r = await self._client.post("/api/show", json={"model": name})
             if r.status_code == 200:
-                caps = r.json().get("capabilities") or []
+                data = r.json()
+                caps = data.get("capabilities") or []
+                kv = kv_bytes_per_token(data.get("model_info") or {})
         except httpx.HTTPError:
             pass
         if not caps:
@@ -83,8 +98,8 @@ class OllamaBackend(LLMBackend):
             else:
                 caps = ["completion"]
         if digest:
-            self._show_cache[digest] = caps
-        return caps
+            self._show_cache[digest] = (caps, kv)
+        return caps, kv
 
     async def list_models(self) -> list[ModelInfo]:
         try:
@@ -96,14 +111,11 @@ class OllamaBackend(LLMBackend):
 
         raw_models = r.json().get("models", [])
         # Запрашиваем возможности всех моделей параллельно — так быстрее
-        caps_list = await asyncio.gather(
-            *(
-                self._capabilities(m["name"], m.get("digest"), m.get("details") or {})
-                for m in raw_models
-            )
+        show_list = await asyncio.gather(
+            *(self._show(m["name"], m.get("digest"), m.get("details") or {}) for m in raw_models)
         )
         models = []
-        for m, caps in zip(raw_models, caps_list):
+        for m, (caps, kv) in zip(raw_models, show_list):
             details = m.get("details") or {}
             models.append(
                 ModelInfo(
@@ -114,6 +126,7 @@ class OllamaBackend(LLMBackend):
                     quantization=details.get("quantization_level"),
                     size_bytes=m.get("size"),
                     capabilities=caps,
+                    kv_bytes_per_token=kv,
                 )
             )
         models.sort(key=lambda x: x.name)

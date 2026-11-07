@@ -8,8 +8,8 @@
 
 from fastapi import APIRouter, HTTPException
 
-from ..config import settings
 from ..llm import LLMError, get_backend
+from ..settings import store as settings_store
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -17,7 +17,11 @@ router = APIRouter(prefix="/api", tags=["system"])
 @router.get("/health")
 async def health():
     backend = get_backend()
-    return {"backend": backend.name, "assistant_name": settings.assistant_name, **(await backend.health())}
+    return {
+        "backend": backend.name,
+        "assistant_name": settings_store.get("assistant_name"),
+        **(await backend.health()),
+    }
 
 
 @router.get("/models")
@@ -30,13 +34,14 @@ async def models():
     chat_models = [m for m in all_models if not m.is_embedding]
     names = [m.name for m in chat_models]
     # Модель по умолчанию: из настроек, если скачана, иначе первая попавшаяся
-    default = settings.default_model if settings.default_model in names else (names[0] if names else None)
+    preferred = settings_store.get("default_model")
+    default = preferred if preferred in names else (names[0] if names else None)
     return {
         "backend": backend.name,
         "default_model": default,
         "models": [m.to_dict() for m in chat_models],
         "embedding_models": [m.to_dict() for m in all_models if m.is_embedding],
-        "num_ctx": settings.num_ctx,
+        "num_ctx": settings_store.get("num_ctx"),
     }
 
 

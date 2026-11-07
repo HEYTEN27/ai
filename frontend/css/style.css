@@ -302,3 +302,135 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   .empty { margin-top: 6vh; }
   .msg-user .bubble { max-width: 90%; }
 }
+
+/* =====================================================================
+   Этап 2: персоны и окно настроек
+   ===================================================================== */
+
+.sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.persona-picker select {
+  background: transparent; border: 1px solid transparent; border-radius: 10px;
+  padding: 6px 8px; font-size: 15px; color: var(--text-muted); max-width: 30vw;
+}
+.persona-picker select:hover, .persona-picker select:focus { background: var(--bg-elevated); border-color: var(--border); outline: none; color: var(--text); }
+.persona-picker option { background: var(--bg-elevated); }
+
+/* Окно настроек — нативный <dialog>: сам умеет закрываться по Esc и затемнять фон */
+.settings {
+  width: min(860px, calc(100vw - 32px)); max-height: calc(100dvh - 48px);
+  padding: 0; border: 1px solid var(--border); border-radius: 16px;
+  background: var(--bg); color: var(--text);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .6);
+}
+.settings[open] { display: flex; flex-direction: column; }
+.settings::backdrop { background: rgba(0, 0, 0, .6); }
+
+.settings-head {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 16px 14px 22px; border-bottom: 1px solid #2c2c2c;
+}
+.settings-head h2 { font-size: 17px; margin: 0; }
+.tabs { display: flex; gap: 4px; margin-right: auto; }
+.tab { background: none; border: 0; padding: 6px 12px; border-radius: 8px; color: var(--text-muted); }
+.tab:hover { background: var(--bg-hover); color: var(--text); }
+.tab.active { background: var(--bg-active); color: var(--text); }
+
+.settings-body { padding: 18px 22px 20px; overflow-y: auto; }
+.settings-body[hidden] { display: none; }
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; min-width: 0; }
+.field label { font-size: 13.5px; font-weight: 600; color: #d6d6d6; }
+.field-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+
+.settings input:not([type=range]):not([type=checkbox]), .settings select, .settings textarea {
+  width: 100%; background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 9px; padding: 8px 10px; outline: none;
+}
+.settings textarea { resize: vertical; line-height: 1.5; font-size: 14px; }
+.settings input:focus, .settings select:focus, .settings textarea:focus { border-color: var(--accent); }
+.settings input[type=range] { width: 100%; accent-color: var(--accent); }
+.settings output { font-size: 13.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.hint { margin: 0; font-size: 12.5px; color: var(--text-faint); line-height: 1.5; }
+.hint code, .hint-details code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-elevated); padding: 1px 5px; border-radius: 4px; color: var(--text-muted); }
+.hint-details { margin: -6px 0 16px; font-size: 13px; color: var(--text-muted); }
+.hint-details summary { cursor: pointer; color: var(--text-faint); font-size: 12.5px; padding: 4px 0; }
+.hint-details summary:hover { color: var(--text-muted); }
+.hint-details ol { margin: 6px 0 0; padding-left: 20px; line-height: 1.6; }
+.hint-details .field-grid { margin-top: 10px; }
+
+.link-btn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12.5px; }
+.link-btn:hover { text-decoration: underline; }
+
+/* Оценка видеопамяти: полоска «другие программы | модель | контекст» */
+.vram-estimate {
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px;
+  background: #1c1c1c;
+}
+.vram-estimate-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; color: var(--text-muted); margin-bottom: 8px; flex-wrap: wrap; }
+.vram-estimate-head b { color: var(--text); font-weight: 600; }
+.est-safe { color: var(--text-faint); }
+.vram-bar { position: relative; display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: #2b2b2b; }
+.vram-bar .seg { height: 100%; transition: width .2s; }
+.seg-reserved, .sw-reserved { background: #5a5a5a; }
+.seg-weights, .sw-weights { background: var(--accent); }
+.seg-kv, .sw-kv { background: #c4b5fd; }
+.vram-estimate.is-warn .seg-kv { background: var(--warn); }
+.vram-estimate.is-danger .seg-kv { background: var(--danger); }
+.vram-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--text-faint); }
+.vram-legend b { color: var(--text-muted); font-weight: 500; }
+.sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.est-message { margin: 8px 0 0; font-size: 13px; color: var(--ok); }
+.vram-estimate.is-warn .est-message { color: var(--warn); }
+.vram-estimate.is-danger .est-message { color: var(--danger); }
+.vram-estimate.is-unknown .est-message { color: var(--text-faint); }
+
+.form-error { color: var(--danger); font-size: 13.5px; margin: 0 0 12px; }
+/* Кнопки «Сохранить/Отмена» прилипают к низу окна — не надо прокручивать до конца */
+.settings-actions {
+  display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
+  position: sticky; bottom: -20px; margin: 0 -22px -20px; padding: 12px 22px 16px;
+  background: linear-gradient(to bottom, rgba(33, 33, 33, 0), var(--bg) 30%);
+}
+.btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+.btn-primary:hover { background: #fff; }
+.btn-danger { color: var(--danger); border-color: rgba(248, 113, 113, .4); margin-right: auto; }
+.btn-danger:hover { background: rgba(248, 113, 113, .1); }
+.btn[hidden] { display: none; }
+
+/* Вкладка «Персоны»: список слева, редактор справа */
+.personas-panel { display: grid; grid-template-columns: 210px 1fr; gap: 20px; }
+.persona-list { display: flex; flex-direction: column; gap: 2px; border-right: 1px solid #2c2c2c; padding-right: 12px; }
+.persona-item {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  background: none; border: 0; border-radius: 9px; padding: 8px 10px; color: var(--text-muted);
+}
+.persona-item:hover { background: var(--bg-hover); color: var(--text); }
+.persona-item.active { background: var(--bg-active); color: var(--text); }
+.persona-item .p-icon { font-size: 18px; width: 22px; text-align: center; }
+.persona-item .p-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.persona-add { margin-top: 8px; color: var(--accent); }
+.persona-title-row { grid-template-columns: 90px 1fr; }
+.field-icon input { text-align: center; font-size: 18px; padding: 5px 6px !important; }
+
+.sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; margin-bottom: 8px; }
+.slider .field-row label { font-weight: 600; }
+.slider .hint { min-height: 2.9em; }
+
+/* Персона в строке под ответом */
+.msg-meta .meta-persona { color: var(--text-muted); }
+
+@media (max-width: 768px) {
+  .persona-picker select { max-width: 34vw; font-size: 14px; padding: 6px 4px; }
+  .model-picker select { font-size: 14px; max-width: 34vw; }
+  .settings { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; margin: 0; }
+  .settings-head { padding: 10px 12px 10px 16px; gap: 8px; }
+  .settings-body { padding: 16px; }
+  .settings-actions { bottom: -16px; margin: 0 -16px -16px; padding: 12px 16px 14px; }
+  .field-grid, .sliders, .personas-panel { grid-template-columns: 1fr; }
+  .persona-list { border-right: 0; padding-right: 0; border-bottom: 1px solid #2c2c2c; padding-bottom: 10px; flex-direction: row; flex-wrap: wrap; }
+  .persona-item { padding: 6px 10px; }
+  .persona-title-row { grid-template-columns: 70px 1fr; }
+}

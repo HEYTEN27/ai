@@ -28,6 +28,9 @@
         <div class="conn-status" id="conn-status">
           <span class="dot"></span><span class="conn-text">Проверяю Ollama…</span>
         </div>
+        <button class="icon-btn" id="settings-btn" type="button" title="Настройки" aria-label="Настройки">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        </button>
       </div>
     </aside>
     <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
@@ -38,6 +41,11 @@
         <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Открыть список диалогов">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
+
+        <label class="persona-picker" title="Персона: роль и стиль ответов">
+          <span class="visually-hidden">Персона</span>
+          <select id="persona-select" aria-label="Персона"></select>
+        </label>
 
         <label class="model-picker">
           <span class="visually-hidden">Модель</span>
@@ -82,6 +90,154 @@
       </form>
     </main>
   </div>
+
+  <!-- ===== Окно настроек ===== -->
+  <dialog class="settings" id="settings-dialog" aria-labelledby="settings-title">
+    <div class="settings-head">
+      <h2 id="settings-title">Настройки</h2>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" class="tab active" data-tab="general" aria-selected="true">Основное</button>
+        <button type="button" role="tab" class="tab" data-tab="personas" aria-selected="false">Персоны</button>
+      </div>
+      <button type="button" class="icon-btn" id="settings-close" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <!-- --- Вкладка «Основное» --- -->
+    <form class="settings-body tab-panel" id="general-form" data-panel="general" novalidate>
+      <div class="field">
+        <label for="set-name">Имя ассистента</label>
+        <input id="set-name" maxlength="40" required>
+      </div>
+
+      <div class="field">
+        <div class="field-row">
+          <label for="set-prompt">Системный промпт</label>
+          <button type="button" class="link-btn" id="set-prompt-reset">Вернуть исходный</button>
+        </div>
+        <textarea id="set-prompt" rows="11" spellcheck="false"></textarea>
+        <p class="hint">Скрытая инструкция, которую модель получает перед каждым диалогом.
+          Подстановки: <code>{name}</code> — имя, <code>{model}</code> — модель, <code>{date}</code> — сегодняшняя дата.
+          Инструкция выбранной персоны добавляется после этого текста.</p>
+      </div>
+
+      <div class="field-grid">
+        <div class="field">
+          <label for="set-model">Модель по умолчанию</label>
+          <select id="set-model"></select>
+        </div>
+        <div class="field">
+          <label for="set-persona">Персона для новых чатов</label>
+          <select id="set-persona"></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-row">
+          <label for="set-ctx">Размер контекста</label>
+          <output id="set-ctx-value"></output>
+        </div>
+        <input type="range" id="set-ctx" min="0" max="6" step="1">
+        <p class="hint">Сколько текста модель «держит в голове»: история диалога, системный промпт,
+          а позже — найденные документы. Больше контекст — больше видеопамяти.
+          После изменения модель перезагрузится при следующем сообщении (10–30 секунд).</p>
+      </div>
+
+      <div class="field">
+        <label for="set-kv">Сжатие KV-кэша в Ollama</label>
+        <select id="set-kv">
+          <option value="f16">Выключено (по умолчанию)</option>
+          <option value="q8_0">q8_0 — в 2 раза меньше памяти, качество почти не меняется</option>
+          <option value="q4_0">q4_0 — в 3,5 раза меньше, качество заметно хуже</option>
+        </select>
+        <details class="hint-details">
+          <summary>Как включить сжатие (это настройка самой Ollama)</summary>
+          <ol>
+            <li>Пуск → «Изменение системных переменных среды» → «Переменные среды».</li>
+            <li>В разделе «Переменные среды пользователя» нажмите «Создать» и добавьте две переменные:
+              <code>OLLAMA_FLASH_ATTENTION</code> = <code>1</code> и <code>OLLAMA_KV_CACHE_TYPE</code> = <code>q8_0</code>.</li>
+            <li>Закройте Ollama (значок в трее → Quit) и запустите снова.</li>
+            <li>Выберите здесь тот же вариант — он нужен только для оценки памяти ниже.</li>
+          </ol>
+        </details>
+      </div>
+
+      <div class="vram-estimate" id="vram-estimate" aria-live="polite">
+        <div class="vram-estimate-head">
+          <span>Видеопамять для <b id="est-model">—</b></span>
+          <span class="est-safe" id="est-safe"></span>
+        </div>
+        <div class="vram-bar" aria-hidden="true">
+          <span class="seg seg-reserved" id="est-bar-reserved"></span>
+          <span class="seg seg-weights" id="est-bar-weights"></span>
+          <span class="seg seg-kv" id="est-bar-kv"></span>
+        </div>
+        <div class="vram-legend">
+          <span><i class="sw sw-reserved"></i>другие программы</span>
+          <span><i class="sw sw-weights"></i>модель <b id="est-weights"></b></span>
+          <span><i class="sw sw-kv"></i>контекст <b id="est-kv"></b></span>
+        </div>
+        <p class="est-message" id="est-message"></p>
+      </div>
+
+      <details class="hint-details">
+        <summary>Видеокарта (для оценки памяти)</summary>
+        <div class="field-grid">
+          <div class="field">
+            <label for="set-vram-total">Всего видеопамяти, ГиБ</label>
+            <input id="set-vram-total" type="number" min="1" max="128" step="0.5">
+          </div>
+          <div class="field">
+            <label for="set-vram-reserved">Занято другими программами, ГиБ</label>
+            <input id="set-vram-reserved" type="number" min="0" max="16" step="0.1">
+          </div>
+        </div>
+        <p class="hint">«Занято» — строка Memory-Usage в <code>nvidia-smi</code>, когда Ollama не запущена.</p>
+      </details>
+
+      <p class="form-error" id="general-error" hidden></p>
+      <div class="settings-actions">
+        <button type="button" class="btn" id="general-cancel">Отмена</button>
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
+
+    <!-- --- Вкладка «Персоны» --- -->
+    <div class="settings-body tab-panel personas-panel" data-panel="personas" hidden>
+      <div class="persona-list" id="persona-list"></div>
+      <form class="persona-editor" id="persona-form" novalidate>
+        <div class="field-grid persona-title-row">
+          <div class="field field-icon">
+            <label for="p-icon">Иконка</label>
+            <input id="p-icon" maxlength="8">
+          </div>
+          <div class="field">
+            <label for="p-name">Название</label>
+            <input id="p-name" maxlength="40" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="p-description">Описание</label>
+          <input id="p-description" maxlength="200">
+        </div>
+        <div class="field">
+          <label for="p-prompt">Инструкция для роли</label>
+          <textarea id="p-prompt" rows="7" spellcheck="false"></textarea>
+          <p class="hint">Добавляется к системному промпту. Пусто — обычный режим.</p>
+        </div>
+
+        <div class="sliders" id="persona-sliders"></div>
+
+        <p class="form-error" id="persona-error" hidden></p>
+        <div class="settings-actions">
+          <button type="button" class="btn btn-danger" id="p-delete">Удалить</button>
+          <button type="button" class="btn" id="p-reset">Сбросить к исходной</button>
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
 
   <script src="vendor/marked.min.js"></script>
   <script src="vendor/purify.min.js"></script>

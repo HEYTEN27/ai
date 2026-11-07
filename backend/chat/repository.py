@@ -13,6 +13,9 @@ from ..db import get_conn
 
 DEFAULT_TITLE = "Новый чат"
 
+# «Значение не передано». Нужно, чтобы отличать «не менять персону» от «сбросить персону (None)».
+_UNSET = object()
+
 
 def _now() -> str:
     # Время храним в UTC в формате ISO 8601 — так его корректно поймёт JavaScript
@@ -29,13 +32,16 @@ def _message_to_dict(row) -> dict:
 # ---------- диалоги ----------
 
 
-def create_conversation(title: str = DEFAULT_TITLE, model: str | None = None) -> dict:
+def create_conversation(
+    title: str = DEFAULT_TITLE, model: str | None = None, persona_id: int | None = None
+) -> dict:
     conv_id = str(uuid.uuid4())
     now = _now()
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-            (conv_id, title, model, now, now),
+            "INSERT INTO conversations (id, title, model, persona_id, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (conv_id, title, model, persona_id, now, now),
         )
     return get_conversation(conv_id)
 
@@ -44,7 +50,8 @@ def list_conversations() -> list[dict]:
     """Все диалоги, свежие сверху."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT id, title, model, created_at, updated_at FROM conversations ORDER BY updated_at DESC"
+            "SELECT id, title, model, persona_id, created_at, updated_at FROM conversations "
+            "ORDER BY updated_at DESC"
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -55,9 +62,14 @@ def get_conversation(conv_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def update_conversation(conv_id: str, *, title: str | None = None, model: str | None = None) -> dict | None:
+def update_conversation(
+    conv_id: str, *, title: str | None = None, model: str | None = None, persona_id=_UNSET
+) -> dict | None:
     """Меняет только переданные поля."""
     fields, values = [], []
+    if persona_id is not _UNSET:
+        fields.append("persona_id = ?")
+        values.append(persona_id)
     if title is not None:
         fields.append("title = ?")
         values.append(title)
@@ -98,13 +110,14 @@ def add_message(
     model: str | None = None,
     stats: dict | None = None,
     stopped: bool = False,
+    persona_id: int | None = None,
 ) -> dict:
     now = _now()
     with get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO messages
-               (conversation_id, role, content, thinking, model, stats, stopped, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (conversation_id, role, content, thinking, model, stats, stopped, persona_id, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 conv_id,
                 role,
@@ -113,6 +126,7 @@ def add_message(
                 model,
                 json.dumps(stats, ensure_ascii=False) if stats else None,
                 int(stopped),
+                persona_id,
                 now,
             ),
         )

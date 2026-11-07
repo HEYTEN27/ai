@@ -44,6 +44,40 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_messages_conversation ON messages(conversation_id, id);
     CREATE INDEX idx_conversations_updated ON conversations(updated_at);
     """,
+    # --- Миграция 2 (этап 2): настройки и персоны ---
+    """
+    -- Настройки «ключ → значение». Значение хранится как JSON, поэтому подходит
+    -- для чисел, строк и списков. Храним только то, что пользователь изменил,
+    -- остальное берётся из значений по умолчанию в коде.
+    CREATE TABLE app_settings (
+        key    TEXT PRIMARY KEY,
+        value  TEXT NOT NULL
+    );
+
+    -- Персоны: роль (дополнение к системному промпту) + параметры генерации
+    CREATE TABLE personas (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug            TEXT UNIQUE,          -- код встроенной персоны ("teacher"), у своих — NULL
+        name            TEXT NOT NULL,
+        icon            TEXT NOT NULL DEFAULT '🤖',
+        description     TEXT NOT NULL DEFAULT '',
+        prompt          TEXT NOT NULL DEFAULT '',  -- добавляется к общему системному промпту
+        temperature     REAL NOT NULL,
+        top_p           REAL NOT NULL,
+        top_k           INTEGER NOT NULL,
+        repeat_penalty  REAL NOT NULL,
+        num_predict     INTEGER NOT NULL DEFAULT 0,  -- макс. длина ответа в токенах, 0 = без лимита
+        builtin         INTEGER NOT NULL DEFAULT 0,
+        sort_order      INTEGER NOT NULL DEFAULT 100,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL
+    );
+
+    -- Какая персона выбрана в диалоге и какой персоной написан каждый ответ.
+    -- Если персону удалят, в диалоге будет NULL и включится персона по умолчанию.
+    ALTER TABLE conversations ADD COLUMN persona_id INTEGER REFERENCES personas(id) ON DELETE SET NULL;
+    ALTER TABLE messages ADD COLUMN persona_id INTEGER REFERENCES personas(id) ON DELETE SET NULL;
+    """,
 ]
 
 

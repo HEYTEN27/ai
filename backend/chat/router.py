@@ -31,11 +31,12 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from ..config import settings
 from ..llm import LLMError, get_backend
+from ..settings import personas as personas_repo
+from ..settings import store as settings_store
 from . import repository as repo
 from .context import build_messages
-from .prompts import default_system_prompt
+from .prompts import build_system_prompt, generation_options
 
 router = APIRouter(prefix="/api/conversations", tags=["chat"])
 
@@ -49,11 +50,13 @@ TITLE_MAX_CHARS = 60
 class ConversationCreate(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     model: str | None = None
+    persona_id: int | None = None  # не указана — персона по умолчанию из настроек
 
 
 class ConversationUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     model: str | None = None
+    persona_id: int | None = None
 
 
 class MessageCreate(BaseModel):
@@ -75,6 +78,20 @@ def _get_or_404(conv_id: str) -> dict:
     if conv is None:
         raise HTTPException(status_code=404, detail="Диалог не найден")
     return conv
+
+
+def resolve_persona(conv: dict, settings: dict) -> dict:
+    """Персона диалога → персона по умолчанию из настроек → «Универсальный»."""
+    return (
+        personas_repo.get_persona(conv.get("persona_id"))
+        or personas_repo.get_persona(settings["default_persona_id"])
+        or personas_repo.fallback_persona()
+    )
+
+
+def _check_persona(persona_id: int | None) -> None:
+    if persona_id is not None and personas_repo.get_persona(persona_id) is None:
+        raise HTTPException(status_code=422, detail="Такой персоны нет")
 
 
 def _sse(event: str, data: dict) -> str:
@@ -107,6 +124,11 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
     content_parts: list[str] = []
     thinking_parts: list[str] = []
 
+    # Настройки и персону читаем при каждом ответе — изменения в интерфейсе
+    # применяются сразу, без перезапуска сервера.
+    settings = settings_store.get_all()
+    persona = resolve_persona(repo.get_conversation(conv_id) or {}, settings)
+
     saved: dict = {}  # защита от двойного сохранения (например, «Стоп» пришёл после done)
 
     def save(stopped: bool, stats: dict | None = None) -> dict | None:
@@ -117,7 +139,8 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
         if not content and not thinking:
             return None  # нечего сохранять
         saved["message"] = repo.add_message(
-            conv_id, "assistant", content, thinking=thinking, model=model, stats=stats, stopped=stopped
+            conv_id, "assistant", content, thinking=thinking, model=model, stats=stats,
+            stopped=stopped, persona_id=persona["id"],
         )
         return saved["message"]
 
@@ -133,17 +156,20 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             raise LLMError(f"«{model}» — модель эмбеддингов, она не умеет вести диалог. Выберите другую.")
         think_param = think if (info is not None and info.supports_thinking) else None
 
+        options = generation_options(settings, persona)
         messages = build_messages(
             repo.list_messages(conv_id),
-            num_ctx=settings.num_ctx,
-            system_prompt=default_system_prompt(model),
+            num_ctx=settings["num_ctx"],
+            system_prompt=build_system_prompt(settings, persona, model),
+            # Если у персоны задан лимит длины ответа — столько и оставляем под ответ
+            reserve_for_answer=options.get("num_predict"),
         )
-        yield _sse("start", {"model": model, "think": bool(think_param)})
+        yield _sse("start", {"model": model, "think": bool(think_param), "persona_id": persona["id"]})
 
         stats = None
         # aclosing гарантирует, что поток к Ollama закроется, даже если браузер оборвал соединение
         async with aclosing(
-            backend.chat_stream(model, messages, think=think_param, options={"num_ctx": settings.num_ctx})
+            backend.chat_stream(model, messages, think=think_param, options=options)
         ) as stream:
             async for chunk in stream:
                 if chunk.kind == "thinking":
@@ -178,7 +204,10 @@ def list_conversations():
 
 @router.post("", status_code=201)
 def create_conversation(body: ConversationCreate):
-    return repo.create_conversation(title=body.title or repo.DEFAULT_TITLE, model=body.model)
+    _check_persona(body.persona_id)
+    return repo.create_conversation(
+        title=body.title or repo.DEFAULT_TITLE, model=body.model, persona_id=body.persona_id
+    )
 
 
 @router.get("/{conv_id}")
@@ -190,7 +219,12 @@ def get_conversation(conv_id: str):
 @router.patch("/{conv_id}")
 def update_conversation(conv_id: str, body: ConversationUpdate):
     _get_or_404(conv_id)
-    return repo.update_conversation(conv_id, title=body.title, model=body.model)
+    changes = {"title": body.title, "model": body.model}
+    # persona_id меняем, только если поле реально прислали (null = вернуть персону по умолчанию)
+    if "persona_id" in body.model_fields_set:
+        _check_persona(body.persona_id)
+        changes["persona_id"] = body.persona_id
+    return repo.update_conversation(conv_id, **changes)
 
 
 @router.delete("/{conv_id}", status_code=204)
@@ -204,7 +238,7 @@ async def send_message(conv_id: str, body: MessageCreate):
     conv = _get_or_404(conv_id)
     if not body.content.strip():
         raise HTTPException(status_code=422, detail="Пустое сообщение")
-    model = body.model or conv["model"] or settings.default_model
+    model = body.model or conv["model"] or settings_store.get("default_model")
 
     # Первое сообщение задаёт название диалога
     is_first = not repo.list_messages(conv_id)
@@ -222,6 +256,6 @@ async def regenerate(conv_id: str, body: RegenerateRequest):
     messages = repo.list_messages(conv_id)
     if not messages or messages[-1]["role"] != "user":
         raise HTTPException(status_code=400, detail="Нет вопроса, на который можно ответить заново")
-    model = body.model or conv["model"] or settings.default_model
+    model = body.model or conv["model"] or settings_store.get("default_model")
     repo.update_conversation(conv_id, model=model)
     return _stream_response(_generate_answer(conv_id, model, body.think))

@@ -96,6 +96,16 @@ export const api = {
   updateConversation: (id, data) => request("PATCH", `/api/conversations/${id}`, data),
   deleteConversation: (id) => request("DELETE", `/api/conversations/${id}`),
 
+  getSettings: () => request("GET", "/api/settings"),
+  updateSettings: (changes) => request("PUT", "/api/settings", changes),
+  vramEstimate: (params) => request("GET", `/api/settings/vram-estimate?${new URLSearchParams(params)}`),
+
+  listPersonas: () => request("GET", "/api/personas"),
+  createPersona: (data) => request("POST", "/api/personas", data),
+  updatePersona: (id, data) => request("PUT", `/api/personas/${id}`, data),
+  resetPersona: (id) => request("POST", `/api/personas/${id}/reset`),
+  deletePersona: (id) => request("DELETE", `/api/personas/${id}`),
+
   sendMessage: (id, body, onEvent, signal) =>
     streamSSE(`/api/conversations/${id}/messages`, body, onEvent, signal),
   regenerate: (id, body, onEvent, signal) =>

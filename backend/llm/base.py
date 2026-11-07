@@ -31,6 +31,9 @@ class ModelInfo:
     quantization: str | None = None  # например "Q4_K_M"
     size_bytes: int | None = None  # размер файла модели на диске
     capabilities: list[str] = field(default_factory=list)  # completion, tools, thinking, embedding
+    # Сколько байт видеопамяти занимает ОДИН токен контекста (KV-кэш в fp16).
+    # Нужно для оценки VRAM в настройках. None — движок не сообщил устройство модели.
+    kv_bytes_per_token: int | None = None
 
     @property
     def is_embedding(self) -> bool:
@@ -99,6 +102,29 @@ class ChatChunk:
     kind: Literal["thinking", "content", "done"]
     text: str = ""
     stats: dict | None = None
+
+
+def kv_bytes_per_token(model_info: dict) -> int | None:
+    """Считает размер KV-кэша на один токен по описанию модели из Ollama (/api/show → model_info).
+
+    Модель хранит для каждого прочитанного токена «ключ» и «значение» (K и V)
+    в каждом слое. Размер = слои × KV-головы × (длина K + длина V) × 2 байта (fp16).
+    Для Qwen3 8B: 36 × 8 × (128 + 128) × 2 = 147 456 байт ≈ 144 КиБ на токен.
+    """
+    arch = model_info.get("general.architecture")
+    if not arch:
+        return None
+    get = lambda key: model_info.get(f"{arch}.{key}")  # noqa: E731
+    blocks, kv_heads = get("block_count"), get("attention.head_count_kv")
+    key_len, value_len = get("attention.key_length"), get("attention.value_length")
+    if not key_len or not value_len:
+        # Не у всех моделей указаны длины явно — тогда считаем «размер эмбеддинга / число голов»
+        emb, heads = get("embedding_length"), get("attention.head_count")
+        if emb and heads:
+            key_len = value_len = emb // heads
+    if not (blocks and kv_heads and key_len and value_len):
+        return None
+    return int(blocks * kv_heads * (key_len + value_len) * 2)
 
 
 def parse_parameter_size(value: str | None) -> float | None:
