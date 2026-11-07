@@ -1,0 +1,22 @@
+# Личные данные пользователя: база, векторы, датасет — не должны попасть в git
+data/
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Модели и результаты обучения (большие файлы)
+*.gguf
+*.safetensors
+training/output/
+
+# Редакторы и ОС
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+tests/e2e/screenshots/

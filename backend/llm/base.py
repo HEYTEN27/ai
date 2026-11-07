@@ -1,0 +1,152 @@
+"""
+Общий интерфейс «движка» языковой модели.
+
+Зачем он нужен: остальной код (чат, память, RAG...) работает с абстрактным
+LLMBackend и не знает, кто на самом деле отвечает — Ollama или llama.cpp.
+Чтобы добавить новый движок, достаточно написать ещё один класс-наследник
+с теми же методами. Это паттерн «адаптер».
+"""
+
+from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass, field
+from typing import AsyncIterator, Literal
+
+# Модели больше этого размера (в миллиардах параметров) не помещаются в 8 ГБ VRAM
+# целиком, поэтому в интерфейсе помечаются как «медленно, частично на CPU».
+LARGE_MODEL_THRESHOLD_B = 9.0
+
+
+class LLMError(Exception):
+    """Ошибка движка с понятным пользователю текстом (показывается в чате)."""
+
+
+@dataclass
+class ModelInfo:
+    """Описание скачанной модели."""
+
+    name: str  # имя, как его понимает движок, например "qwen3:8b"
+    family: str | None = None  # семейство: qwen3, llama, bert...
+    parameter_size: str | None = None  # как пишет движок: "8.2B"
+    parameters_b: float | None = None  # то же числом: 8.2
+    quantization: str | None = None  # например "Q4_K_M"
+    size_bytes: int | None = None  # размер файла модели на диске
+    capabilities: list[str] = field(default_factory=list)  # completion, tools, thinking, embedding
+
+    @property
+    def is_embedding(self) -> bool:
+        """Модель эмбеддингов (bge-m3 и т.п.) — для чата не годится."""
+        return "embedding" in self.capabilities and "completion" not in self.capabilities
+
+    @property
+    def supports_thinking(self) -> bool:
+        return "thinking" in self.capabilities
+
+    @property
+    def supports_tools(self) -> bool:
+        return "tools" in self.capabilities
+
+    @property
+    def is_large(self) -> bool:
+        return self.parameters_b is not None and self.parameters_b > LARGE_MODEL_THRESHOLD_B
+
+    def to_dict(self) -> dict:
+        data = asdict(self)
+        data.update(
+            is_embedding=self.is_embedding,
+            supports_thinking=self.supports_thinking,
+            supports_tools=self.supports_tools,
+            is_large=self.is_large,
+        )
+        return data
+
+
+@dataclass
+class LoadedModel:
+    """Модель, которая сейчас загружена в память (для индикатора VRAM)."""
+
+    name: str
+    size_bytes: int  # сколько всего памяти занимает модель
+    vram_bytes: int  # сколько из этого лежит в видеопамяти
+    context_length: int | None = None
+
+    @property
+    def gpu_percent(self) -> float:
+        if self.size_bytes <= 0:
+            return 0.0
+        return round(min(self.vram_bytes / self.size_bytes, 1.0) * 100, 1)
+
+    @property
+    def fully_on_gpu(self) -> bool:
+        # Небольшой допуск: Ollama иногда показывает size_vram на пару байт меньше size
+        return self.gpu_percent >= 99.5
+
+    def to_dict(self) -> dict:
+        data = asdict(self)
+        data.update(gpu_percent=self.gpu_percent, fully_on_gpu=self.fully_on_gpu)
+        return data
+
+
+@dataclass
+class ChatChunk:
+    """Кусочек потокового ответа.
+
+    kind:
+      "thinking" — фрагмент «размышлений» модели (показываем в свёрнутом блоке)
+      "content"  — фрагмент самого ответа
+      "done"     — генерация закончена, в stats лежит статистика
+    """
+
+    kind: Literal["thinking", "content", "done"]
+    text: str = ""
+    stats: dict | None = None
+
+
+def parse_parameter_size(value: str | None) -> float | None:
+    """Превращает строку вида "8.2B" или "567.75M" в миллиарды параметров (8.2, 0.57)."""
+    if not value:
+        return None
+    value = value.strip().upper()
+    multipliers = {"B": 1.0, "M": 0.001, "K": 0.000001}
+    try:
+        if value[-1] in multipliers:
+            return round(float(value[:-1]) * multipliers[value[-1]], 3)
+        return round(float(value) / 1e9, 3)  # просто число параметров
+    except ValueError:
+        return None
+
+
+class LLMBackend(ABC):
+    """Абстрактный движок. Все методы асинхронные, чтобы не блокировать сервер."""
+
+    name: str = "base"
+
+    @abstractmethod
+    async def health(self) -> dict:
+        """Проверка связи. Возвращает {"ok": bool, "version": str | None, "error": str | None}."""
+
+    @abstractmethod
+    async def list_models(self) -> list[ModelInfo]:
+        """Список скачанных моделей."""
+
+    @abstractmethod
+    def chat_stream(
+        self,
+        model: str,
+        messages: list[dict],
+        *,
+        think: bool | None = None,
+        options: dict | None = None,
+    ) -> AsyncIterator[ChatChunk]:
+        """Потоковая генерация ответа.
+
+        messages — список {"role": "user"|"assistant"|"system", "content": "..."}.
+        think    — включить «размышления» (только для моделей, которые это умеют).
+        options  — параметры генерации: num_ctx, temperature и т.д.
+        """
+
+    async def loaded_models(self) -> list[LoadedModel] | None:
+        """Какие модели сейчас в памяти. None = движок не умеет об этом сообщать."""
+        return None
+
+    async def close(self) -> None:
+        """Освободить ресурсы (HTTP-соединения) при остановке сервера."""
