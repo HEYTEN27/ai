@@ -24,6 +24,9 @@
    - `node tests/e2e/documents.js` — этап 9: вложения, создание Word/PowerPoint/Excel, правка Word, перетаскивание;
    - `node tests/e2e/artifacts.js` — этап 10: игры в песочнице, версии, «Исправить», Three.js офлайн, схемы, SVG;
    - `node tests/e2e/lessons.js` — этап 11: уроки из 👎 и исправлений, авто-размышления, «▶ Проверить» Python/JS;
+   - `node tests/e2e/voice_neural.js` — этап 12: скачивание голоса, озвучка по предложениям во время ответа.
+     Сервер для него — с адресом «HuggingFace» в эмуляторе: `PIPER_VOICES_URL=http://127.0.0.1:11434/_voices python -m backend`
+     (голос-пустышка собирается из `tests/fake_piper.py`, нужен пакет onnx из requirements-dev.txt);
    - `node tests/e2e/hud.js` — интерфейс «Джарвис»: заставка, ядро, «…, сэр», озвучка
      (поддельный голос Windows), обращение, смена темы, телефон;
    - `node tests/e2e/ollama_down.js` — при остановленном эмуляторе.

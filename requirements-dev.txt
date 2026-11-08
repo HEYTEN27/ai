@@ -2,3 +2,4 @@
 -r requirements.txt
 pytest>=8
 nbformat>=5.9      # проверка ноутбука Colab в тестах
+onnx>=1.15        # голос-пустышка для тестов нейроголоса (tests/fake_piper.py)

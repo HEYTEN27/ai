@@ -336,6 +336,28 @@ def _lesson(body: dict):
             "eval_count": 10, "eval_duration": 200_000_000}
 
 
+# ---------- «HuggingFace» с голосами Piper (этап 12) ----------
+
+
+@app.get("/_voices/{path:path}")
+async def fake_voice_file(path: str):
+    """Отдаёт голос-пустышку так, как его отдаёт HuggingFace: …/ru/ru_RU/<голос>/medium/<файл>."""
+    import tempfile
+    from pathlib import Path
+
+    from fastapi.responses import FileResponse
+
+    from tests.fake_piper import make_voice
+
+    name = path.rsplit("/", 1)[-1]
+    folder = Path(tempfile.gettempdir()) / "fake-piper-voices"
+    stem = name.removesuffix(".json").removesuffix(".onnx")
+    if not (folder / f"{stem}.onnx").exists():
+        make_voice(folder, stem)
+    await asyncio.sleep(state.get("voice_delay", 0.3))  # «скачивание» — чтобы интерфейс успел показать прогресс
+    return FileResponse(folder / name)
+
+
 # ---------- эмбеддинги ----------
 
 

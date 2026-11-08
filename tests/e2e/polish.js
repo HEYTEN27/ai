@@ -81,7 +81,9 @@ async function send(page, text) {
   const zipBytes = fs.readFileSync(await zip.path());
   assert(zipBytes.slice(0, 2).toString() === 'PK' && zip.suggestedFilename().endsWith('.zip'), 'архив всех диалогов');
   await page.screenshot({ path: OUT + '/p3-data-tab.png' });
-  await page.uncheck('#v-enabled', { force: true });
+  // Щёлкаем по подписи: вкладка длинная, а сам переключатель скрыт и может оказаться под шапкой окна
+  await page.locator('label.toggle:has(#v-enabled)').click();
+  assert(!(await page.isChecked('#v-enabled')), 'микрофон выключен в настройках');
   await page.click('#data-form button[type=submit]');
   await page.waitForSelector('#settings-dialog', { state: 'hidden' });
   await page.waitForSelector('#mic-btn', { state: 'hidden' });

@@ -95,8 +95,11 @@ def defaults() -> dict:
         # --- Оформление и «характер» ---
         "ui_theme": "hud",  # hud — голографический интерфейс, classic — простая тёмная тема
         "address": "сэр",  # как ассистент обращается к пользователю (подстановка {address})
-        "tts_enabled": True,  # озвучивать ответы встроенным голосом Windows (офлайн)
-        "tts_voice": "",  # имя голоса; пусто — выбрать русский мужской автоматически
+        "tts_enabled": True,  # озвучивать ответы (офлайн: нейроголос Piper или голос Windows)
+        "tts_voice": "",  # голос Windows; пусто — выбрать русский мужской автоматически
+        "tts_engine": "neural",  # neural — нейроголос Piper (если скачан), system — голос Windows
+        "tts_neural_voice": "ruslan",
+        "tts_effect": True,  # лёгкий эффект «голос ИИ»: тембр чуть ниже, немного пространства
         "tts_rate": 1.0,  # скорость речи
         "ui_sounds": True,  # тихие звуки интерфейса
     }
@@ -139,7 +142,7 @@ def _validate(key: str, value):
             raise SettingsError("Занято другими программами: от 0 до 16 ГиБ")
     elif key in ("memory_enabled", "memory_autosave", "embedding_on_gpu", "tools_enabled", "tool_calculator",
                  "tool_web", "tool_files", "tool_python", "tool_documents", "artifacts_enabled", "lessons_enabled", "auto_think", "auto_check_code", "confirm_python", "confirm_web", "voice_enabled",
-                 "tts_enabled", "ui_sounds"):
+                 "tts_enabled", "ui_sounds", "tts_effect"):
         if not isinstance(value, bool):
             raise SettingsError("Ожидается да/нет (true/false)")
     elif key == "memory_budget_tokens":
@@ -190,6 +193,13 @@ def _validate(key: str, value):
             raise SettingsError("Обращение: от 1 до 30 символов (например, «сэр», «мисс», «босс»)")
     elif key == "tts_voice":
         value = str(value).strip()[:200]
+    elif key == "tts_engine":
+        if value not in ("neural", "system"):
+            raise SettingsError("Движок озвучки: neural или system")
+    elif key == "tts_neural_voice":
+        from ..voice.tts import VOICES
+        if value not in VOICES:
+            raise SettingsError(f"Нейроголос: один из {', '.join(VOICES)}")
     elif key == "tts_rate":
         value = float(value)
         if not 0.5 <= value <= 2.0:

@@ -25,7 +25,7 @@ import { autoOpen, closeArtifact, initArtifacts, isArtifactOpen, setFixHandler }
 import { runBoot } from "./boot.js";
 import { applyTheme, currentTheme, initHud, renderGreeting, setCoreState, setIdentity, waitingText } from "./hud.js";
 import { play, setSoundsEnabled } from "./sounds.js";
-import { configureSpeech, onVoicesReady, pickVoice, speak, stopSpeaking } from "./speech.js";
+import { activeEngine, configureSpeech, createStreamSpeaker, isSpeaking, onVoicesReady, setNeuralReady, stopSpeaking, voiceLabel } from "./speech.js";
 
 initHud(); // ядро, часы — до загрузки данных, чтобы интерфейс сразу выглядел готовым
 import { initKnowledgePage, refreshKnowledgePage } from "./knowledge.js";
@@ -436,6 +436,9 @@ async function streamAnswer(startRequest) {
   const loaded = state.lastStatus?.loaded?.some((m) => m.name === selectedModel());
   bubble.setWaiting(waitingText(loaded));
   stopSpeaking(); // новый вопрос — прерываем чтение прошлого ответа
+  // Озвучка по предложениям прямо во время ответа (если включена и есть голос)
+  const speaker = createStreamSpeaker();
+  let spokenText = "";
   setCoreState("thinking");
   play("send");
 
@@ -474,20 +477,25 @@ async function streamAnswer(startRequest) {
       files = data.files || [];
     }
     else if (event === "thinking") bubble.appendThinking(data.text);
-    else if (event === "token") bubble.appendContent(data.text);
+    else if (event === "token") {
+      bubble.appendContent(data.text);
+      spokenText += data.text;
+      speaker.feed(spokenText); // законченные предложения сразу уходят на озвучку
+    }
     else if (event === "done") {
       finished = true;
       bubble.finish({ message: data.message, memoryFacts, sources, files });
       release();
-      setCoreState("idle");
       play("done");
-      if (data.message?.content) speak(data.message.content); // озвучка — если включена и есть голос
+      speaker.finish(spokenText); // дочитать хвост ответа
+      if (!isSpeaking()) setCoreState("idle"); // голос ещё звучит — ядро остаётся в режиме «говорит»
       autoOpen(bubble.element); // новая игра или схема — сразу в панели
       maybeAutoCheck(bubble.element);
     } else if (event === "error") {
       finished = true;
       bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources, files });
       release();
+      speaker.cancel();
       setCoreState("idle");
       play("error");
     } else if (event === "tool_start") {
@@ -516,7 +524,10 @@ async function streamAnswer(startRequest) {
   } catch (e) {
     if (finished) {
       /* ответ уже показан — обрыв во время ожидания памяти не страшен */
-    } else if (e.name === "AbortError") bubble.finish({ stopped: true, memoryFacts, sources });
+    } else if (e.name === "AbortError") {
+      speaker.cancel(); // «Стоп» — замолкаем
+      bubble.finish({ stopped: true, memoryFacts, sources });
+    }
     else bubble.finish({ error: e.message, memoryFacts, sources });
   } finally {
     release();
@@ -699,15 +710,23 @@ async function applyVoiceSettings() {
   configureSpeech(values);
   setSoundsEnabled(values.ui_sounds);
   ttsToggle.setAttribute("aria-pressed", String(values.tts_enabled));
-  updateTtsAvailability();
+  await refreshNeuralVoice();
 }
 
-/** Кнопка 🔊 видна, только если в системе есть русский офлайн-голос. */
+/** Кнопка 🔊 видна, если есть чем говорить: нейроголос скачан или в Windows есть русский голос. */
 function updateTtsAvailability() {
-  const voice = pickVoice();
-  ttsToggle.hidden = !voice;
-  document.body.classList.toggle("tts-ready", Boolean(voice));
-  if (voice) ttsToggle.title = `Озвучивать ответы — голос «${voice.name}» (офлайн)`;
+  const engine = activeEngine();
+  ttsToggle.hidden = !engine;
+  document.body.classList.toggle("tts-ready", Boolean(engine));
+  if (engine) ttsToggle.title = `Озвучивать ответы — ${voiceLabel()} (офлайн)`;
+}
+
+/** Готов ли нейроголос: пакет Piper установлен и выбранный голос скачан. */
+async function refreshNeuralVoice() {
+  const status = await api.ttsStatus().catch(() => null);
+  const voice = status?.voices.find((v) => v.id === status.voice);
+  setNeuralReady(Boolean(status?.installed && voice?.downloaded));
+  updateTtsAvailability();
 }
 onVoicesReady(updateTtsAvailability);
 window.addEventListener("voice-settings-changed", applyVoiceSettings);

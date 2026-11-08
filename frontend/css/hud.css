@@ -349,6 +349,13 @@ body[data-core="speaking"] .tts-toggle { color: var(--accent); box-shadow: var(-
 [data-theme="hud"] .lessons-section h2 { font-family: var(--font-hud); letter-spacing: .06em; }
 [data-theme="hud"] .run-output { background: rgba(2, 10, 20, .7); border-color: rgba(63, 217, 255, .16); }
 
+/* ---------- нейроголос (этап 12) ---------- */
+
+[data-theme="hud"] .tts-voice { border-radius: 3px; background: var(--panel); border-color: rgba(63, 217, 255, .22); }
+[data-theme="hud"] .tts-voice.is-selected { box-shadow: var(--glow); border-color: rgba(63, 217, 255, .6); }
+[data-theme="hud"] .tts-bar { border-radius: 1px; background: rgba(63, 217, 255, .1); }
+[data-theme="hud"] .tts-bar-fill { box-shadow: 0 0 8px rgba(63, 217, 255, .7); }
+
 /* ---------- узкие экраны и «меньше анимаций» ---------- */
 
 @media (max-width: 768px) {

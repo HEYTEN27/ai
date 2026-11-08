@@ -128,6 +128,7 @@ async function send(page, text, { waitDone = true } = {}) {
   await page.click('#settings-btn');
   await page.click('.tab[data-tab=tools]');
   await page.waitForSelector('#tools-form:not([hidden])');
+  await page.waitForSelector('#t-enabled:checked'); // сначала значения с сервера, потом щёлкаем
   await page.uncheck('#t-enabled', { force: true });
   assert(await page.isVisible('#tools-form.tools-disabled'), 'без главного выключателя остальное неактивно');
   await page.click('#tools-form button[type=submit]');

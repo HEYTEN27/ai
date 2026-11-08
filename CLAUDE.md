@@ -182,5 +182,16 @@
       «напиши игру/реферат» −2; порог 2), настройка auto_think, extras.auto_think. «▶ Проверить»: Python →
       POST /api/tools/run-python (та же песочница), JS → iframe sandbox+CSP, console → postMessage; «Исправить».
       Исправлена гонка: отложенный rAF стрима больше не затирает финальную отрисовку ответа
+- [x] Этап 12: нейроголос — Piper (piper-tts, onnxruntime на CPU, espeak-ng внутри колеса). backend/voice/tts.py:
+      голоса ru_RU ruslan (по умолчанию)/dmitri/denis/irina medium с HuggingFace или hf-mirror (PIPER_VOICES_URL
+      переопределяет), фоновое скачивание с прогрессом (.part → rename), Engine держит один голос, синтез в потоке
+      под замком, length_scale = 1.08/rate («дворецкий»). API /api/voice/tts (GET статус, POST текст→WAV, /download,
+      DELETE голоса); настройки tts_engine (neural|system, фолбэк на доступный), tts_neural_voice, tts_effect.
+      Фронтенд speech.js: сессия-очередь, createStreamSpeaker — законченные предложения вне блоков кода уходят на
+      синтез во время стрима, предзагрузка 2 следующих, Web Audio: playbackRate 0.965 + highpass + presence + лёгкий
+      reverb (сгенерированный импульс). Клонирование голоса актёра — нет (голос реального человека).
+      Тесты на голосе-пустышке tests/fake_piper.py (ONNX с интерфейсом Piper — путь через настоящий piper/espeak/onnxruntime);
+      HuggingFace из контейнера недоступен, звучание настоящих голосов проверяет пользователь.
+      Пользователь: «работать с моделями» = 3D-модели; голос — русский «британский дворецкий»
 
-Этапы 1–11 готовы. Дальше по плану: 12 нейроголос, 13 генерация изображений, 14 зрение, 15 проекты и удобство.
+Этапы 1–12 готовы. Дальше по плану: 13 генерация изображений, 14 зрение, 15 проекты и удобство (+ 3D-модели).

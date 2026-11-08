@@ -150,6 +150,10 @@ export const api = {
     return response.json();
   },
 
+  ttsStatus: () => request("GET", "/api/voice/tts"),
+  ttsDownload: (voice, mirror) => request("POST", "/api/voice/tts/download", { voice, mirror }),
+  ttsDeleteVoice: (voice) => request("DELETE", `/api/voice/tts/voices/${voice}`),
+
   rateMessage: (messageId, rating) => request("POST", "/api/dataset/feedback", { message_id: messageId, rating }),
   correctMessage: (messageId, corrected) => request("POST", "/api/dataset/correct", { message_id: messageId, corrected }),
   dataset: (filter = "all") => request("GET", `/api/dataset?filter=${filter}`),
