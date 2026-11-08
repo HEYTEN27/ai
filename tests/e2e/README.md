@@ -22,6 +22,7 @@
      Сервер для него — `python tests/e2e/serve_fake_voice.py` (заглушка Whisper, но запись
      из браузера декодируется по-настоящему);
    - `node tests/e2e/documents.js` — этап 9: вложения, создание Word/PowerPoint/Excel, правка Word, перетаскивание;
+   - `node tests/e2e/artifacts.js` — этап 10: игры в песочнице, версии, «Исправить», Three.js офлайн, схемы, SVG;
    - `node tests/e2e/hud.js` — интерфейс «Джарвис»: заставка, ядро, «…, сэр», озвучка
      (поддельный голос Windows), обращение, смена темы, телефон;
    - `node tests/e2e/ollama_down.js` — при остановленном эмуляторе.

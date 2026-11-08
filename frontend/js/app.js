@@ -21,6 +21,7 @@ import { initDatasetPage, refreshDatasetPage } from "./dataset.js";
 import { initTrainingPage, refreshTrainingPage } from "./training.js";
 import { initVoice } from "./voice.js";
 import { hasAttachments, initAttachments, takeReady } from "./attachments.js";
+import { autoOpen, closeArtifact, initArtifacts, isArtifactOpen, setFixHandler } from "./artifacts.js";
 import { runBoot } from "./boot.js";
 import { applyTheme, currentTheme, initHud, renderGreeting, setCoreState, setIdentity, waitingText } from "./hud.js";
 import { play, setSoundsEnabled } from "./sounds.js";
@@ -196,6 +197,7 @@ async function refreshConversations() {
 
 async function openConversation(id) {
   if (state.abortController) stopGeneration();
+  if (id !== state.activeId) closeArtifact(); // артефакт другого диалога не оставляем открытым
   try {
     const conv = await api.getConversation(id);
     state.activeId = conv.id;
@@ -224,6 +226,7 @@ async function openConversation(id) {
 
 function newChat() {
   if (state.abortController) stopGeneration();
+  closeArtifact();
   state.activeId = null;
   showChatView();
   setHash(null);
@@ -475,6 +478,7 @@ async function streamAnswer(startRequest) {
       setCoreState("idle");
       play("done");
       if (data.message?.content) speak(data.message.content); // озвучка — если включена и есть голос
+      autoOpen(bubble.element); // новая игра или схема — сразу в панели
     } else if (event === "error") {
       finished = true;
       bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources, files });
@@ -565,6 +569,13 @@ input.addEventListener("keydown", (e) => {
 
 initAttachments({ onChange: updateSendButton });
 
+// Артефакты: кнопка «Исправить» в панели отправляет Джарвису описание ошибки
+initArtifacts();
+setFixHandler((text) => {
+  if (state.abortController) return;
+  sendMessage(text);
+});
+
 // Голосовой ввод: распознанный текст вставляем туда, где стоит курсор (не отправляем сразу —
 // распознавание иногда ошибается, пусть пользователь проверит)
 initVoice({
@@ -594,7 +605,9 @@ $("new-chat-btn").addEventListener("click", newChat);
 
 // Esc останавливает генерацию
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && state.abortController) stopGeneration();
+  if (e.key !== "Escape") return;
+  if (state.abortController) stopGeneration();
+  else if (isArtifactOpen() && !document.querySelector("dialog[open]")) closeArtifact();
 });
 
 // ---------- боковая панель на телефоне ----------

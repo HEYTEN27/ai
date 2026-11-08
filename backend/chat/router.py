@@ -47,6 +47,7 @@ from ..tools import confirm as tool_confirm
 from ..tools import registry as tool_registry
 from ..settings import store as settings_store
 from . import repository as repo
+from .artifacts import ARTIFACTS_HINT, compact_history
 from .context import build_messages
 from .prompts import build_system_prompt, generation_options
 
@@ -247,11 +248,16 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
         tools_by_name = {t.name: t for t in tools}
 
         options = generation_options(settings, persona)
+        # Артефакты: инструкция модели + в контексте полный код только у последних версий игр и схем
+        hints = [tool_registry.system_hint(tools)]
+        if settings["artifacts_enabled"]:
+            hints.append(ARTIFACTS_HINT)
+            history = compact_history(history)
         messages = build_messages(
             history,
             num_ctx=settings["num_ctx"],
             system_prompt=build_system_prompt(settings, persona, model, format_for_prompt(facts),
-                                              tool_registry.system_hint(tools)),
+                                              "\n\n".join(h for h in hints if h)),
             # Если у персоны задан лимит длины ответа — столько и оставляем под ответ
             reserve_for_answer=options.get("num_predict"),
         )

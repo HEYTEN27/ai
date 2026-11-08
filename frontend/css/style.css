@@ -1002,3 +1002,83 @@ body.tts-ready .msg-meta .btn-speak { display: inline-flex; }
   .doc-page { padding: 18px; margin: 0 8px 8px; }
   .slides-grid { grid-template-columns: 1fr 1fr; padding: 0 8px 8px; }
 }
+
+/* =====================================================================
+   Этап 10: артефакты — карточки в чате и панель справа
+   ===================================================================== */
+
+.artifact-card {
+  margin: 10px 0; border: 1px solid var(--border); border-radius: 12px; background: #1b1b1b; overflow: hidden;
+}
+.artifact-card.is-open { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124, 156, 255, .12); }
+.ac-head { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+.ac-icon { font-size: 24px; }
+.ac-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ac-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-sub { font-size: 12.5px; color: var(--text-faint); }
+.artifact-card.is-writing .ac-sub::before {
+  content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%;
+  border: 2px solid var(--text-faint); border-top-color: var(--accent); animation: spin .8s linear infinite; vertical-align: -1px;
+}
+.artifact-card.is-truncated .ac-sub { color: var(--warn); }
+.ac-open { white-space: nowrap; padding: 7px 14px; }
+.ac-preview { display: block; border-top: 1px solid #2a2a2a; cursor: zoom-in; }
+img.ac-preview { max-width: 100%; max-height: 300px; margin: 0 auto; padding: 12px; background: #fff; width: 100%; object-fit: contain; }
+.ac-mermaid { padding: 14px; overflow-x: auto; color: var(--text-muted); font-size: 13px; text-align: center; }
+/* Общее правило svg {width: 18px} — для иконок; схеме возвращаем нормальный размер */
+.ac-mermaid svg { width: 100%; max-width: 100%; height: auto; max-height: 380px; }
+.ac-mermaid.is-error { cursor: default; text-align: left; }
+
+.fix-bar {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px;
+  background: rgba(248, 113, 113, .1); color: #fca5a5; border-radius: 8px;
+}
+.fix-bar span { flex: 1; min-width: 0; word-break: break-word; }
+.fix-bar.is-warn { background: rgba(251, 191, 36, .1); color: var(--warn); }
+.fix-btn { flex-shrink: 0; padding: 5px 12px; font-size: 13px; }
+
+/* Панель */
+/* --ap-width задаётся на :root — его меняет перетаскивание левого края панели */
+.artifact-panel {
+  position: relative; flex-shrink: 0; width: var(--ap-width); min-width: 360px; max-width: 75vw;
+  display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--bg-sidebar);
+}
+:root { --ap-width: 46vw; }
+.artifact-panel[hidden] { display: none; }
+.ap-resizer { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 2; }
+.artifact-panel.resizing iframe { pointer-events: none; }
+.ap-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 16px; border-bottom: 1px solid var(--border); min-height: 56px; flex-wrap: wrap; }
+.ap-heading { flex: 1; min-width: 120px; display: flex; flex-direction: column; line-height: 1.25; }
+.ap-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-kind { font-size: 12px; color: var(--text-faint); }
+.ap-version { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; font-size: 13px; }
+.ap-tabs { display: flex; background: var(--bg-elevated); border-radius: 9px; padding: 3px; }
+.ap-tabs button { border: 0; background: transparent; color: var(--text-muted); padding: 4px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; }
+.ap-tabs button[aria-selected="true"] { background: var(--bg-active); color: var(--text); }
+.ap-actions { display: flex; gap: 2px; }
+.ap-actions .icon-btn[hidden] { display: none; }
+.ap-bars { display: flex; flex-direction: column; gap: 6px; padding: 0 10px; }
+.ap-bars:not(:empty) { padding: 8px 10px 0; }
+.ap-view { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px; }
+.ap-view[hidden], .ap-code[hidden] { display: none; }
+.ap-frame { flex: 1; width: 100%; border: 0; border-radius: 8px; background: #fff; }
+.ap-image { flex: 1; min-height: 0; object-fit: contain; background: #fff; border-radius: 8px; padding: 16px; width: 100%; }
+.ap-mermaid { flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 16px; }
+.ap-mermaid svg { width: 100%; height: auto; }
+.ap-code { flex: 1; min-height: 0; overflow: auto; padding: 10px; }
+.ap-code pre { margin: 0; padding: 14px; background: var(--bg-code); border-radius: 8px; font-size: 12.5px; font-family: var(--font-mono); min-height: 100%; }
+.artifact-panel:fullscreen { width: 100vw; max-width: none; }
+
+/* Пока панель открыта, чат узкий — прячем второстепенное в верхней строке, чтобы ничего не уезжало под панель */
+@media (min-width: 1001px) {
+  body.artifact-open .topbar { overflow: hidden; }
+  body.artifact-open :is(.hud-clock, .vram-text, .topbar .toggle-label, .hint-drop) { display: none; }
+  body.artifact-open .model-picker select { max-width: 190px; }
+}
+
+/* На узком экране панель открывается поверх чата */
+@media (max-width: 1000px) {
+  .artifact-panel { position: fixed; inset: 0; z-index: 40; width: 100vw; max-width: none; min-width: 0; border-left: 0; }
+  .ap-resizer { display: none; }
+  .ap-head { padding-left: 12px; }
+}

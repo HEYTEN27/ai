@@ -74,6 +74,8 @@ async function send(page, text) {
   await page.click('#settings-btn');
   await page.click('.tab[data-tab=data]');
   await page.waitForSelector('#data-form:not([hidden])');
+  // Список моделей приходит с сервера чуть позже, чем открывается вкладка
+  await page.waitForFunction(() => document.querySelectorAll('#v-model option').length > 0);
   assert((await page.$$eval('#v-model option', (o) => o.length)) === 4, 'выбор модели распознавания');
   const [zip] = await Promise.all([page.waitForEvent('download'), page.click('#data-form a[href="/api/export/all"]')]);
   const zipBytes = fs.readFileSync(await zip.path());

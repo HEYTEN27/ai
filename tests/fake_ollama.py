@@ -113,7 +113,63 @@ async def ps():
     return {"models": list(state["loaded"].values())}
 
 
+GAME_HTML = """<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>{title}</title>
+<style>body{{margin:0;background:#111;color:#eee;font:16px sans-serif}} canvas{{display:block;margin:10px auto;background:#222}}</style>
+</head><body>
+<div id="score">Счёт: 0 · стрелки — движение</div>
+<canvas id="c" width="300" height="200"></canvas>
+<script>
+const ctx = document.getElementById('c').getContext('2d');
+let x = 10;
+function frame() {{ ctx.clearRect(0, 0, 300, 200); ctx.fillStyle = '{color}'; ctx.fillRect(x, 90, 20, 20); }}
+frame();
+document.addEventListener('keydown', (e) => {{ if (e.key === 'ArrowRight') {{ x += 10; frame(); document.getElementById('score').textContent = 'Счёт: ' + x; }} }});
+window.gameReady = true;
+{extra}
+</script>
+</body></html>"""
+
+
+def _artifact_answer(question: str) -> str | None:
+    """Ответы с артефактами (этап 10) — по ключевым словам, как настоящая модель."""
+    low = question.lower()
+    if "длинную игру" in low:  # ответ оборвался посреди кода — не хватило контекста
+        code = GAME_HTML.format(title="Тетрис", color="#fa3", extra="").split("<script>")[0]
+        return f"Пишу игру:\n\n```html\n{code}<script>\nconst board = ["
+    if "игру с ошибкой" in low:
+        code = GAME_HTML.format(title="Змейка", color="#e33", extra="undefinedFunction();")
+        return f"Вот игра.\n\n```html\n{code}\n```\n\nУправление — стрелками."
+    if "исправь" in low and "змейка" in low:
+        code = GAME_HTML.format(title="Змейка", color="#3e3", extra="")
+        return f"Исправил ошибку.\n\n```html\n{code}\n```\n\nТеперь работает."
+    if "игру" in low:
+        code = GAME_HTML.format(title="Змейка", color="#3af", extra="")
+        return f"Вот игра «Змейка».\n\n```html\n{code}\n```\n\nУправление — стрелками."
+    if "3d" in low:
+        code = ("<!DOCTYPE html><html><head><title>Куб</title></head><body>"
+                "<script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"></script>"
+                "<script>const scene = new THREE.Scene(); document.title = 'Куб ' + THREE.REVISION; window.threeOk = true;</script>"
+                "</body></html>")
+        return f"3D-сцена:\n\n```html\n{code}\n```"
+    if "в сеть" in low:  # артефакт пытается выйти в интернет — должен быть заблокирован
+        code = ("<!DOCTYPE html><html><head><title>Сеть</title></head><body><script>"
+                "fetch('http://127.0.0.1:8000/api/settings').then(() => { window.netOk = 'yes'; })"
+                ".catch(() => { window.netOk = 'blocked'; document.body.textContent = 'blocked'; });"
+                "</script></body></html>")
+        return f"Проверка:\n\n```html\n{code}\n```"
+    if "схем" in low:
+        return "Схема:\n\n```mermaid\nflowchart LR\n  A[Вопрос] --> B{Есть в памяти?}\n  B -->|да| C[Ответ]\n  B -->|нет| D[Поиск]\n```\n\nГотово."
+    if "svg" in low:
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><title>Солнце</title>'
+               '<circle cx="50" cy="50" r="30" fill="orange"/><script>alert(1)</script></svg>')
+        return f"Рисунок:\n\n```svg\n{svg}\n```"
+    return None
+
+
 def _answer_text(question: str) -> str:
+    if (artifact := _artifact_answer(question)) is not None:
+        return artifact
     return (
         f"Вы спросили: «{question[:80]}». Это **тестовый ответ** эмулятора Ollama.\n\n"
         "Пример кода:\n\n```python\ndef hello(name):\n    return f\"Привет, {name}!\"\n```\n\n"

@@ -8,6 +8,7 @@ import { copyText, enhanceCodeBlocks, renderMarkdown } from "./markdown.js";
 import { openSource } from "./knowledge.js";
 import { describeEvent, plural } from "./memory.js";
 import { describeFile, fileIcon, formatSize } from "./attachments.js";
+import { enhanceArtifacts } from "./artifacts.js";
 
 const messagesEl = () => document.getElementById("messages");
 
@@ -151,6 +152,7 @@ export function createAssistantMessage({ onRetry } = {}) {
       renderScheduled = false;
       const stick = isNearBottom();
       contentEl.innerHTML = renderMarkdown(content);
+      enhanceArtifacts(contentEl, { raw: content, streaming: true }); // игры и схемы — карточками
       enhanceCodeBlocks(contentEl, { highlight: false });
       thinkingBody.textContent = thinking;
       if (stick) scrollToBottom(true);
@@ -162,6 +164,7 @@ export function createAssistantMessage({ onRetry } = {}) {
 
   function renderBody() {
     contentEl.innerHTML = renderMarkdown(shownText());
+    enhanceArtifacts(contentEl, { raw: shownText(), streaming: msg.classList.contains("streaming") });
     enhanceCodeBlocks(contentEl, { highlight: true });
     if (lastSources.length) linkifyCitations(contentEl, lastSources);
   }

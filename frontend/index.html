@@ -387,6 +387,42 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         <div class="drop-box">📎 Отпустите, чтобы прикрепить файлы<small>PDF, Word, Excel, PowerPoint, текст, код — до 25 МБ</small></div>
       </div>
     </main>
+
+    <!-- Панель артефактов (этап 10): игры, страницы, схемы — справа от чата -->
+    <aside class="artifact-panel" id="artifact-panel" hidden aria-label="Артефакт">
+      <div class="ap-resizer" id="ap-resizer" title="Потяните, чтобы изменить ширину"></div>
+      <header class="ap-head">
+        <div class="ap-heading">
+          <span class="ap-title" id="ap-title"></span>
+          <span class="ap-kind" id="ap-kind"></span>
+        </div>
+        <select id="ap-version" class="ap-version" aria-label="Версия" hidden></select>
+        <div class="ap-tabs" id="ap-tabs" role="tablist" data-tab="view">
+          <button type="button" data-tab="view" role="tab" aria-selected="true">Просмотр</button>
+          <button type="button" data-tab="code" role="tab" aria-selected="false">Код</button>
+        </div>
+        <div class="ap-actions">
+          <button class="icon-btn" id="ap-restart" type="button" title="Перезапустить" aria-label="Перезапустить">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+          </button>
+          <button class="icon-btn" id="ap-copy" type="button" title="Копировать код" aria-label="Копировать код">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          </button>
+          <button class="icon-btn" id="ap-download" type="button" title="Скачать файл" aria-label="Скачать файл">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+          </button>
+          <button class="icon-btn" id="ap-fullscreen" type="button" title="На весь экран" aria-label="На весь экран">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </button>
+          <button class="icon-btn" id="ap-close" type="button" title="Закрыть" aria-label="Закрыть">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="ap-bars" id="ap-bars"></div>
+      <div class="ap-view" id="ap-view"></div>
+      <div class="ap-code" id="ap-code" hidden><pre><code id="ap-code-body"></code></pre></div>
+    </aside>
   </div>
 
   <!-- ===== Просмотр источника (по клику на [1] в ответе) ===== -->
@@ -696,6 +732,13 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
           <span class="spacer"></span>
         </div>
         <label class="check"><input type="checkbox" id="t-confirm-python"> Спрашивать перед запуском кода</label>
+      </div>
+
+      <div class="tool-setting">
+        <label class="toggle"><input type="checkbox" id="t-artifacts"><span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">🎮 Артефакты: игры, страницы, схемы</span></label>
+        <p class="hint">Джарвис пишет игры и интерактивные страницы, а они запускаются в панели справа — в изолированной
+          песочнице без доступа к приложению и к интернету. Схемы Mermaid и рисунки SVG видны прямо в чате.</p>
       </div>
 
       <div class="tool-setting">

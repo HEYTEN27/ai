@@ -323,6 +323,23 @@ body[data-core="speaking"] .tts-toggle { color: var(--accent); box-shadow: var(-
 [data-theme="hud"] .doc-download { border-radius: 3px; }
 [data-theme="hud"] .doc-page, [data-theme="hud"] .slide-thumb { border-radius: 2px; }
 
+/* ---------- артефакты (этап 10) ---------- */
+
+[data-theme="hud"] .artifact-card { border-radius: 3px; background: var(--brackets), var(--panel); border-color: rgba(63, 217, 255, .22); }
+[data-theme="hud"] .artifact-card.is-open { box-shadow: var(--glow); border-color: rgba(63, 217, 255, .6); }
+[data-theme="hud"] :is(.ac-title, .ap-title) { font-family: var(--font-hud); letter-spacing: .04em; }
+[data-theme="hud"] .ac-open { border-radius: 3px; }
+[data-theme="hud"] .artifact-panel {
+  background: linear-gradient(180deg, rgba(4, 16, 28, .96), rgba(2, 8, 16, .98));
+  border-left: 1px solid rgba(63, 217, 255, .35); box-shadow: -12px 0 40px rgba(0, 0, 0, .45);
+}
+[data-theme="hud"] .ap-head { border-bottom-color: rgba(63, 217, 255, .25); }
+[data-theme="hud"] .ap-tabs, [data-theme="hud"] .ap-version { border-radius: 3px; background: rgba(63, 217, 255, .07); }
+[data-theme="hud"] .ap-tabs button { border-radius: 2px; font-family: var(--font-hud); letter-spacing: .05em; }
+[data-theme="hud"] .ap-tabs button[aria-selected="true"] { background: rgba(63, 217, 255, .18); color: var(--accent); }
+[data-theme="hud"] .ap-frame, [data-theme="hud"] .ap-image { border-radius: 2px; box-shadow: 0 0 0 1px rgba(63, 217, 255, .25), var(--glow); }
+[data-theme="hud"] .fix-bar { border-radius: 3px; }
+
 /* ---------- узкие экраны и «меньше анимаций» ---------- */
 
 @media (max-width: 768px) {
