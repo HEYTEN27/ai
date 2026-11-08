@@ -156,6 +156,25 @@
             <div id="memory-events"></div>
           </details>
 
+          <section class="lessons-section" id="lessons-section" aria-labelledby="lessons-title">
+            <h2 id="lessons-title">📘 Уроки</h2>
+            <p class="memory-sub">Как отвечать именно вам. Когда вы исправляете ответ или ставите 👎 с причиной, Джарвис
+              формулирует правило и соблюдает его со следующего ответа. Модель от этого не меняется — правила
+              подставляются в её инструкцию (настоящее дообучение — на странице «Обучение»).</p>
+            <div class="memory-switches">
+              <label class="toggle">
+                <input type="checkbox" id="lessons-enabled">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">Учиться на исправлениях и оценках</span>
+              </label>
+            </div>
+            <form class="lesson-add" id="lesson-add-form">
+              <input id="lesson-add-text" maxlength="300" placeholder="Например: Примеры кода — на JavaScript" aria-label="Новый урок">
+              <button type="submit" class="btn">Добавить урок</button>
+            </form>
+            <div class="lessons-list" id="lessons-list"></div>
+          </section>
+
           <div class="memory-danger">
             <button type="button" class="btn btn-danger" id="memory-clear">Стереть всю память</button>
           </div>
@@ -732,6 +751,15 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
           <span class="spacer"></span>
         </div>
         <label class="check"><input type="checkbox" id="t-confirm-python"> Спрашивать перед запуском кода</label>
+      </div>
+
+      <div class="tool-setting">
+        <label class="toggle"><input type="checkbox" id="t-auto-think"><span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">🧠 Авто-размышления на сложных вопросах</span></label>
+        <p class="hint">Задачи, доказательства, поиск ошибок в коде — модель сначала «решает на черновике». Точнее,
+          но дольше на 10–30 секунд. На простых вопросах не включается. Переключатель «Размышлять» вверху включает их всегда.</p>
+        <label class="check"><input type="checkbox" id="t-auto-check"> Сам проверять Python-код из ответа в песочнице
+          (иначе — кнопкой «▶ Проверить» под кодом)</label>
       </div>
 
       <div class="tool-setting">

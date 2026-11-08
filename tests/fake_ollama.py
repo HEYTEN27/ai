@@ -134,6 +134,12 @@ window.gameReady = true;
 def _artifact_answer(question: str) -> str | None:
     """Ответы с артефактами (этап 10) — по ключевым словам, как настоящая модель."""
     low = question.lower()
+    if "код с ошибкой" in low:  # этап 11: «▶ Проверить» найдёт ошибку
+        return "Вот код:\n\n```python\nitems = [1, 2, 3]\nprint(sum(items) / 0)\n```"
+    if "исправь" in low and "выдал ошибку" in low:
+        return "Исправил деление:\n\n```python\nitems = [1, 2, 3]\nprint(sum(items) / len(items))\n```"
+    if "пример на js" in low:
+        return "Пример:\n\n```js\nconst a = [1, 2, 3];\nconsole.log(a.map((x) => x * 2));\nsetTimeout(() => console.log('готово'), 10);\n```"
     if "длинную игру" in low:  # ответ оборвался посреди кода — не хватило контекста
         code = GAME_HTML.format(title="Тетрис", color="#fa3", extra="").split("<script>")[0]
         return f"Пишу игру:\n\n```html\n{code}<script>\nconst board = ["
@@ -194,6 +200,8 @@ def _tokens(text: str) -> list[str]:
 async def chat(request: Request):
     body = await request.json()
     if body.get("format"):
+        if "модуль уроков" in body["messages"][0]["content"]:
+            return _lesson(body)
         return await _extraction(body)
     state["last_request"] = body
     state["chat_requests"].append(body)
@@ -304,6 +312,28 @@ async def _extraction(body: dict):
 
     return {"model": body["model"], "message": {"role": "assistant", "content": content}, "done": True,
             "eval_count": 20, "eval_duration": 400_000_000}
+
+
+def _lesson(body: dict):
+    """Изображает модель, которая выводит урок из исправления или жалобы (этап 11)."""
+    state["last_lesson"] = body
+    text = body["messages"][-1]["content"]
+    tail = text.split("Ответ ассистента:", 1)[-1]  # исправление и жалоба — после ответа
+    known = [int(i) for i in re.findall(r"\[id=(\d+)\]", text)]
+    low = tail.lower()
+    if "мусор" in low:
+        content = "Не JSON вовсе"
+    else:
+        result = {"general": False, "lesson": "", "replaces": 0}
+        if "typescript" in low:
+            result = {"general": True, "lesson": "Код пиши на TypeScript", "replaces": 0}
+        elif "на python" in low and known:
+            result = {"general": True, "lesson": "Код пиши на Python", "replaces": known[0]}
+        elif "проще" in low:
+            result = {"general": True, "lesson": "Объясняй проще, на бытовых примерах", "replaces": 0}
+        content = json.dumps(result, ensure_ascii=False)
+    return {"model": body["model"], "message": {"role": "assistant", "content": content}, "done": True,
+            "eval_count": 10, "eval_duration": 200_000_000}
 
 
 # ---------- эмбеддинги ----------

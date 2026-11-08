@@ -36,6 +36,8 @@ from pydantic import BaseModel, Field
 from ..files import store as files_store
 from ..files.context import attachments_budget, augment_with_files, build_attachment_block
 from ..knowledge import store as kb_store
+from ..lessons import repository as lessons_repo
+from ..lessons.learner import format_for_prompt as lessons_block
 from ..knowledge.search import augment_question, build_query, sources_for_message
 from ..knowledge.search import search as kb_search
 from ..llm import LLMError, get_backend
@@ -48,6 +50,7 @@ from ..tools import registry as tool_registry
 from ..settings import store as settings_store
 from . import repository as repo
 from .artifacts import ARTIFACTS_HINT, compact_history
+from .complexity import assess as assess_complexity
 from .context import build_messages
 from .prompts import build_system_prompt, generation_options
 
@@ -164,6 +167,8 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
     sources: list[dict] = []  # фрагменты из базы знаний (для ссылок [1], [2])
     tool_log: list[dict] = []  # какие инструменты вызывались — для карточек в чате
     files_report: list[dict] = []  # какие файлы диалога ушли в контекст (целиком или выдержками)
+    auto_think = False  # «размышления» включились сами (сложный вопрос)
+    think_reasons: list[str] = []
 
     def save(stopped: bool, stats: dict | None = None) -> dict | None:
         if "message" in saved:
@@ -184,6 +189,8 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             extras["tools"] = tool_log
         if files_report:
             extras["files"] = files_report
+        if auto_think:
+            extras["auto_think"] = think_reasons
         saved["message"] = repo.add_message(
             conv_id, "assistant", content, thinking=thinking, model=model, stats=stats,
             stopped=stopped, persona_id=persona["id"], extras=extras or None,
@@ -204,10 +211,14 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             )
         if info is not None and info.is_embedding:
             raise LLMError(f"«{model}» — модель эмбеддингов, она не умеет вести диалог. Выберите другую.")
-        think_param = think if (info is not None and info.supports_thinking) else None
-
         history = repo.list_messages(conv_id)
         user_messages = [m["content"] for m in history if m["role"] == "user"]
+
+        # Авто-размышления: переключатель выключен, но вопрос сложный — модель сначала подумает
+        auto_think, think_reasons = False, []
+        if not think and settings["auto_think"] and info is not None and info.supports_thinking and user_messages:
+            auto_think, think_reasons = assess_complexity(user_messages[-1])
+        think_param = (think or auto_think) if (info is not None and info.supports_thinking) else None
 
         # Долговременная память: выбираем факты о пользователе, подходящие к вопросу.
         # Ищем по двум последним вопросам — «а на нём можно?» без предыдущего непонятно.
@@ -253,6 +264,9 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
         if settings["artifacts_enabled"]:
             hints.append(ARTIFACTS_HINT)
             history = compact_history(history)
+        # Уроки из исправлений и 👎 (этап 11) — модель учитывает их со следующего же ответа
+        lessons = lessons_repo.enabled_lessons() if settings["lessons_enabled"] else []
+        hints.append(lessons_block(lessons))
         messages = build_messages(
             history,
             num_ctx=settings["num_ctx"],
@@ -263,10 +277,12 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
         )
         yield _sse("start", {
             "model": model, "think": bool(think_param), "persona_id": persona["id"],
+            "auto_think": auto_think, "think_reasons": think_reasons,
             "memory": {"method": method, "facts": [{"id": f["id"], "content": f["content"]} for f in facts]},
             "knowledge": {"method": kb_method, "sources": sources},
             "tools": [t.name for t in tools],
             "files": files_report,
+            "lessons": len([line for line in hints[-1].splitlines() if line.startswith("- ")]),
         })
 
         # Цикл «модель → инструмент → модель». Обычно один проход: модель просто отвечает.

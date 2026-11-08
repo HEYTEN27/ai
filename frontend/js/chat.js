@@ -9,6 +9,8 @@ import { openSource } from "./knowledge.js";
 import { describeEvent, plural } from "./memory.js";
 import { describeFile, fileIcon, formatSize } from "./attachments.js";
 import { enhanceArtifacts } from "./artifacts.js";
+import { learnAndShow } from "./lessons.js";
+import { addRunButtons } from "./coderun.js";
 
 const messagesEl = () => document.getElementById("messages");
 
@@ -143,6 +145,7 @@ export function createAssistantMessage({ onRetry } = {}) {
   let content = "";
   let thinking = "";
   let renderScheduled = false;
+  let finished = false;
 
   // Перерисовываем markdown не на каждый токен, а не чаще одного раза за кадр экрана
   function scheduleRender() {
@@ -150,6 +153,8 @@ export function createAssistantMessage({ onRetry } = {}) {
     renderScheduled = true;
     requestAnimationFrame(() => {
       renderScheduled = false;
+      // Ответ уже закончен — финальная отрисовка сделана в finish(); не затираем её (подсветку, кнопки)
+      if (finished) return;
       const stick = isNearBottom();
       contentEl.innerHTML = renderMarkdown(content);
       enhanceArtifacts(contentEl, { raw: content, streaming: true }); // игры и схемы — карточками
@@ -166,6 +171,7 @@ export function createAssistantMessage({ onRetry } = {}) {
     contentEl.innerHTML = renderMarkdown(shownText());
     enhanceArtifacts(contentEl, { raw: shownText(), streaming: msg.classList.contains("streaming") });
     enhanceCodeBlocks(contentEl, { highlight: true });
+    if (!msg.classList.contains("streaming")) addRunButtons(contentEl); // «▶ Проверить» у Python и JS
     if (lastSources.length) linkifyCitations(contentEl, lastSources);
   }
 
@@ -179,6 +185,11 @@ export function createAssistantMessage({ onRetry } = {}) {
     if (isSpeaking()) stopSpeaking();
     else speak(shownText(), { force: true });
   });
+
+  function setAutoThinkLabel(reasons) {
+    thinkingEl.querySelector("summary").textContent = `Размышления · включились сами${reasons?.length ? `: ${reasons.join(", ")}` : ""}`;
+    thinkingEl.classList.add("is-auto");
+  }
 
   // ---------- 👍 / 👎 / «Исправить» ----------
 
@@ -223,6 +234,57 @@ export function createAssistantMessage({ onRetry } = {}) {
       alert(e.message);
     }
     updateFeedbackUI();
+    if (rating === -1) openWhyBox();
+    else msg.querySelector(".why-box")?.remove();
+  }
+
+  /** Контейнер для отметок «📘 Урок» под ответом. */
+  function lessonBox() {
+    let box = msg.querySelector(".lesson-notes");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "lesson-notes";
+      metaEl.after(box);
+    }
+    return box;
+  }
+
+  /** После 👎: «Что не так?» — быстрые причины и (по желанию) как надо. Из этого выводится урок. */
+  function openWhyBox() {
+    if (msg.querySelector(".why-box")) return;
+    const box = document.createElement("div");
+    box.className = "why-box";
+    box.innerHTML = `<span class="why-title">Что не так? Джарвис учтёт это в следующих ответах.</span>
+      <div class="why-chips"></div>
+      <input class="why-text" maxlength="500" placeholder="Как надо? (необязательно) — например: «код пиши на TypeScript»">
+      <div class="why-actions"><button type="button" class="btn btn-skip">Не сейчас</button>
+        <button type="button" class="btn btn-primary btn-send">Учесть</button></div>`;
+    const chips = box.querySelector(".why-chips");
+    for (const [key, label] of WHY_REASONS) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "why-chip";
+      chip.dataset.key = key;
+      chip.textContent = label;
+      chip.setAttribute("aria-pressed", "false");
+      chip.addEventListener("click", () => chip.setAttribute("aria-pressed", String(chip.getAttribute("aria-pressed") !== "true")));
+      chips.append(chip);
+    }
+    const input = box.querySelector(".why-text");
+    const send = () => {
+      const quick = [...chips.querySelectorAll('[aria-pressed="true"]')].map((c) => c.dataset.key);
+      const reason = input.value.trim();
+      box.remove();
+      if (!quick.length && !reason) return;
+      learnAndShow(lessonBox(), { message_id: messageId, quick, reason: reason || null });
+    };
+    box.querySelector(".btn-send").addEventListener("click", send);
+    box.querySelector(".btn-skip").addEventListener("click", () => box.remove());
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") send();
+      if (e.key === "Escape") box.remove();
+    });
+    metaEl.after(box);
   }
 
   function openEditor() {
@@ -257,6 +319,8 @@ export function createAssistantMessage({ onRetry } = {}) {
       close();
       renderBody();
       updateFeedbackUI();
+      // Исправление — повод сделать вывод на будущее («пиши на TypeScript»), а не только пример для датасета
+      if (value.trim()) learnAndShow(lessonBox(), { message_id: messageId, corrected: value });
     };
     box.querySelector(".btn-cancel").addEventListener("click", close);
     box.querySelector(".btn-save").addEventListener("click", () => save(textarea.value));
@@ -309,6 +373,7 @@ export function createAssistantMessage({ onRetry } = {}) {
      */
     finish({ message, stopped = false, error = null, memoryFacts = null, sources = null, files = null } = {}) {
       msg.classList.remove("streaming", "streaming-wait");
+      finished = true;
       for (const card of toolCards.values()) card.cancel(); // незавершённые инструменты — «остановлено»
       if (message) {
         content = message.content ?? content;
@@ -324,6 +389,7 @@ export function createAssistantMessage({ onRetry } = {}) {
         thinkingEl.hidden = false;
         thinkingEl.open = false;
         thinkingBody.textContent = thinking;
+        if (message?.extras?.auto_think) setAutoThinkLabel(message.extras.auto_think);
       }
 
       const meta = metaText(message || {});
@@ -379,6 +445,9 @@ export function createAssistantMessage({ onRetry } = {}) {
     setRetryVisible(visible) {
       retryBtn.hidden = !visible;
     },
+
+    /** «Размышления включились сами» — подпись над ходом мыслей. */
+    setAutoThink: setAutoThinkLabel,
 
     /** Модель вызвала инструмент — показываем карточку «выполняю…». */
     toolStart(entry) {
@@ -483,6 +552,10 @@ function renderSources(msg, metaEl, sources) {
 // =====================================================================
 // Карточки инструментов
 // =====================================================================
+
+// Причины 👎 — те же ключи, что в backend/lessons/learner.py (QUICK_REASONS)
+const WHY_REASONS = [["long", "Слишком длинно"], ["short", "Слишком коротко"], ["complex", "Сложно объяснено"],
+  ["wrong", "Ошибка в ответе"], ["offtopic", "Не по теме"]];
 
 const STATUS_TEXT = {
   running: "выполняю…", waiting: "ждёт вашего решения", ok: "готово", error: "ошибка",

@@ -340,6 +340,15 @@ body[data-core="speaking"] .tts-toggle { color: var(--accent); box-shadow: var(-
 [data-theme="hud"] .ap-frame, [data-theme="hud"] .ap-image { border-radius: 2px; box-shadow: 0 0 0 1px rgba(63, 217, 255, .25), var(--glow); }
 [data-theme="hud"] .fix-bar { border-radius: 3px; }
 
+/* ---------- уроки и проверка кода (этап 11) ---------- */
+
+[data-theme="hud"] :is(.why-box, .lesson-item) { border-radius: 3px; background: var(--panel); border-color: rgba(63, 217, 255, .22); }
+[data-theme="hud"] .why-chip { border-radius: 2px; border-color: rgba(63, 217, 255, .3); font-family: var(--font-hud); letter-spacing: .03em; }
+[data-theme="hud"] .why-chip[aria-pressed="true"] { box-shadow: var(--glow); }
+[data-theme="hud"] .lessons-section { border-top-color: rgba(63, 217, 255, .2); }
+[data-theme="hud"] .lessons-section h2 { font-family: var(--font-hud); letter-spacing: .06em; }
+[data-theme="hud"] .run-output { background: rgba(2, 10, 20, .7); border-color: rgba(63, 217, 255, .16); }
+
 /* ---------- узкие экраны и «меньше анимаций» ---------- */
 
 @media (max-width: 768px) {

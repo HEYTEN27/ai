@@ -77,6 +77,9 @@ def defaults() -> dict:
         "tool_web": True,  # поиск и чтение страниц — единственное, что выходит в интернет
         "tool_files": True,  # работает, только когда выбрана папка files_root
         "tool_python": True,
+        "lessons_enabled": True,  # учиться на исправлениях и 👎: правила в системном промпте (этап 11)
+        "auto_think": True,  # на сложных вопросах «размышления» включаются сами
+        "auto_check_code": False,  # сам запускать Python-код из ответа в песочнице (проверка)
         "artifacts_enabled": True,  # игры, страницы, схемы в панели рядом с чатом (этап 10)
         "tool_documents": True,  # создание Word, PowerPoint, Excel (файлы остаются внутри приложения)
         "files_root": "",  # папка, из которой модели можно читать файлы (с подтверждением)
@@ -135,7 +138,7 @@ def _validate(key: str, value):
         if not 0 <= value <= 16:
             raise SettingsError("Занято другими программами: от 0 до 16 ГиБ")
     elif key in ("memory_enabled", "memory_autosave", "embedding_on_gpu", "tools_enabled", "tool_calculator",
-                 "tool_web", "tool_files", "tool_python", "tool_documents", "artifacts_enabled", "confirm_python", "confirm_web", "voice_enabled",
+                 "tool_web", "tool_files", "tool_python", "tool_documents", "artifacts_enabled", "lessons_enabled", "auto_think", "auto_check_code", "confirm_python", "confirm_web", "voice_enabled",
                  "tts_enabled", "ui_sounds"):
         if not isinstance(value, bool):
             raise SettingsError("Ожидается да/нет (true/false)")

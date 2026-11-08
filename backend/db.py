@@ -213,6 +213,19 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_files_conversation ON files(conversation_id);
     """,
+    # --- Миграция 7 (этап 11): уроки — правила ответа, выведенные из исправлений и 👎 ---
+    """
+    CREATE TABLE lessons (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        content          TEXT NOT NULL,              -- «Код пиши на TypeScript»
+        source           TEXT NOT NULL CHECK (source IN ('correction', 'feedback', 'manual')),
+        enabled          INTEGER NOT NULL DEFAULT 1, -- выключенный урок не подставляется в промпт
+        message_id       INTEGER REFERENCES messages(id) ON DELETE SET NULL,  -- из какого ответа выведен
+        conversation_id  TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+    );
+    """,
 ]
 
 

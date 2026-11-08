@@ -30,6 +30,8 @@ import { configureSpeech, onVoicesReady, pickVoice, speak, stopSpeaking } from "
 initHud(); // ядро, часы — до загрузки данных, чтобы интерфейс сразу выглядел готовым
 import { initKnowledgePage, refreshKnowledgePage } from "./knowledge.js";
 import { initMemoryPage, refreshMemoryPage } from "./memory.js";
+import { initLessons, refreshLessons } from "./lessons.js";
+import { autoCheck, setCodeFixHandler } from "./coderun.js";
 import { initSettings } from "./settings.js";
 import { renderConversationList } from "./sidebar.js";
 import {
@@ -256,7 +258,7 @@ setMemoryLookup((id) => state.memoryById.get(id));
 
 // Страницы, которые показываются вместо чата: адрес, секция, кнопка в боковой панели, обновление
 const PAGES = {
-  memory: { hash: "#/memory", view: "memory-view", button: "memory-btn", refresh: () => refreshMemoryPage() },
+  memory: { hash: "#/memory", view: "memory-view", button: "memory-btn", refresh: () => { refreshMemoryPage(); refreshLessons(); } },
   knowledge: { hash: "#/knowledge", view: "knowledge-view", button: "knowledge-btn", refresh: () => refreshKnowledgePage() },
   dataset: { hash: "#/dataset", view: "dataset-view", button: "dataset-btn", refresh: () => refreshDatasetPage() },
   training: { hash: "#/training", view: "training-view", button: "training-btn", refresh: () => refreshTrainingPage() },
@@ -352,6 +354,7 @@ kbScope.addEventListener("change", async () => {
 
 initKnowledgePage({ onChanged: fillKnowledgeScope });
 initMemoryPage({ onChanged: loadMemoryCache });
+initLessons();
 
 // Адрес вида #/c/<id> — чтобы после обновления страницы открылся тот же диалог
 function setHash(id) {
@@ -465,6 +468,7 @@ async function streamAnswer(startRequest) {
       bubble.startStreaming();
     }
     if (event === "start") {
+      if (data.auto_think) bubble.setAutoThink(data.think_reasons);
       memoryFacts = data.memory?.facts || [];
       sources = data.knowledge?.sources || [];
       files = data.files || [];
@@ -479,6 +483,7 @@ async function streamAnswer(startRequest) {
       play("done");
       if (data.message?.content) speak(data.message.content); // озвучка — если включена и есть голос
       autoOpen(bubble.element); // новая игра или схема — сразу в панели
+      maybeAutoCheck(bubble.element);
     } else if (event === "error") {
       finished = true;
       bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources, files });
@@ -516,6 +521,13 @@ async function streamAnswer(startRequest) {
   } finally {
     release();
   }
+}
+
+/** Автопроверка Python-кода из нового ответа — если включена в ⚙ → «Инструменты». */
+async function maybeAutoCheck(messageEl) {
+  if (!messageEl.querySelector(".run-btn")) return;
+  const { values } = await api.getSettings().catch(() => ({ values: null }));
+  if (values?.auto_check_code) autoCheck(messageEl);
 }
 
 /** Отмена изменения памяти из чата. Возвращает обновлённое событие (или null при ошибке). */
@@ -575,6 +587,7 @@ setFixHandler((text) => {
   if (state.abortController) return;
   sendMessage(text);
 });
+setCodeFixHandler((text) => !state.abortController && sendMessage(text)); // «Исправить» под упавшим кодом
 
 // Голосовой ввод: распознанный текст вставляем туда, где стоит курсор (не отправляем сразу —
 // распознавание иногда ошибается, пусть пользователь проверит)

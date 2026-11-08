@@ -1082,3 +1082,70 @@ img.ac-preview { max-width: 100%; max-height: 300px; margin: 0 auto; padding: 12
   .ap-resizer { display: none; }
   .ap-head { padding-left: 12px; }
 }
+
+/* =====================================================================
+   Этап 11: уроки, причины 👎, авто-размышления, «▶ Проверить»
+   ===================================================================== */
+
+/* «Что не так?» после 👎 */
+.why-box {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 12px; background: #1b1b1b; font-size: 13.5px;
+}
+.why-title { color: var(--text-muted); }
+.why-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.why-chip {
+  border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 16px;
+  padding: 4px 12px; font-size: 13px; cursor: pointer;
+}
+.why-chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.why-text { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+.why-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.why-actions .btn { padding: 5px 14px; }
+
+/* «📘 Урок: …» под ответом */
+.lesson-notes { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.lesson-note { font-size: 13px; color: var(--text-muted); }
+.lesson-note b { color: var(--text); font-weight: 600; }
+.lesson-note.is-pending { color: var(--text-faint); animation: pulse 1.4s ease-in-out infinite; }
+.lesson-note.is-none { color: var(--text-faint); }
+
+/* Раздел «Уроки» на странице «Память» */
+.lessons-section { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
+.lessons-section h2 { font-size: 18px; margin: 0 0 6px; }
+.lesson-add { display: flex; gap: 8px; margin: 12px 0; }
+.lesson-add input { flex: 1; min-width: 0; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+.lessons-list { display: flex; flex-direction: column; gap: 6px; }
+.lessons-empty { color: var(--text-faint); font-size: 14px; }
+.lesson-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.lesson-item.is-off { opacity: .55; }
+.lesson-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; }
+.lesson-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lesson-text { word-break: break-word; }
+.lesson-meta { font-size: 12px; color: var(--text-faint); }
+.lesson-edit { flex: 1; min-width: 0; background: var(--bg-elevated); border: 1px solid var(--accent); border-radius: 8px; padding: 6px 10px; }
+.link-btn.danger { color: var(--danger); }
+
+/* Подпись «размышления включились сами» */
+.thinking.is-auto > summary { color: var(--accent); }
+
+/* «▶ Проверить» в шапке блока кода и результат запуска */
+.code-header .run-btn { margin-left: auto; margin-right: 10px; color: var(--ok); }
+.code-header .run-btn svg { fill: currentColor; stroke: none; width: 12px; height: 12px; }
+.code-header .run-btn:disabled { opacity: .5; }
+.run-output {
+  margin: -6px 0 12px; padding: 8px 12px; border: 1px solid #2a2a2a; border-top: 0; border-radius: 0 0 8px 8px;
+  background: #121212; font-size: 13px; display: flex; flex-direction: column; gap: 6px;
+}
+.run-output.is-running { color: var(--text-faint); }
+.run-head { font-size: 12.5px; color: var(--text-muted); }
+.run-output.is-ok .run-head { color: var(--ok); }
+.run-output.is-error .run-head { color: var(--danger); }
+.run-output pre {
+  margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12.5px;
+  max-height: 260px; overflow: auto;
+}
+.run-output pre.run-err { color: #fca5a5; }
+.run-empty { color: var(--text-faint); }
+.run-output .fix-btn { align-self: flex-start; }
+.run-frame { position: absolute; width: 0; height: 0; border: 0; visibility: hidden; }

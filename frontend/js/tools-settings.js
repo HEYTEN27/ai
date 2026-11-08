@@ -16,6 +16,8 @@ const TOGGLES = {
   "t-python": "tool_python",
   "t-documents": "tool_documents",
   "t-artifacts": "artifacts_enabled",
+  "t-auto-think": "auto_think",
+  "t-auto-check": "auto_check_code",
   "t-confirm-web": "confirm_web",
   "t-confirm-python": "confirm_python",
 };

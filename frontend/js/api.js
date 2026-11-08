@@ -166,6 +166,13 @@ export const api = {
   },
   deleteFile: (id) => request("DELETE", `/api/files/${id}`),
 
+  lessons: () => request("GET", "/api/lessons"),
+  addLesson: (content) => request("POST", "/api/lessons", { content }),
+  updateLesson: (id, data) => request("PATCH", `/api/lessons/${id}`, data),
+  deleteLesson: (id) => request("DELETE", `/api/lessons/${id}`),
+  learnLesson: (data) => request("POST", "/api/lessons/learn", data),
+  runPython: (code) => request("POST", "/api/tools/run-python", { code }),
+
   sendMessage: (id, body, onEvent, signal) =>
     streamSSE(`/api/conversations/${id}/messages`, body, onEvent, signal),
   regenerate: (id, body, onEvent, signal) =>
