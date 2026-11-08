@@ -3,6 +3,7 @@
 // =====================================================================
 
 import { api } from "./api.js";
+import { isSpeaking, speak, stopSpeaking } from "./speech.js";
 import { copyText, enhanceCodeBlocks, renderMarkdown } from "./markdown.js";
 import { openSource } from "./knowledge.js";
 import { describeEvent, plural } from "./memory.js";
@@ -27,6 +28,7 @@ const ICONS = {
   like: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3Zm0 0 4-8a3 3 0 0 1 3 3v4h5.5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.1 21H7"/></svg>',
   dislike: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3Zm0 0-4 8a3 3 0 0 1-3-3v-4H4.5a2 2 0 0 1-2-2.3l1.4-8A2 2 0 0 1 5.9 3H17"/></svg>',
   edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  speak: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>',
 };
 
 /** Прокручен ли чат почти до конца? Если пользователь листает вверх — не дёргаем его. */
@@ -92,6 +94,7 @@ export function createAssistantMessage({ onRetry } = {}) {
       <span class="meta-text"></span>
       <button class="icon-btn btn-copy" type="button" title="Копировать ответ">${ICONS.copy}</button>
       <button class="icon-btn btn-retry" type="button" title="Ответить заново" hidden>${ICONS.retry}</button>
+      <button class="icon-btn btn-speak" type="button" title="Прочитать вслух">${ICONS.speak}</button>
       <span class="feedback" hidden>
         <button class="icon-btn btn-like" type="button" title="Хороший ответ — сохранить в датасет для обучения" aria-pressed="false">${ICONS.like}</button>
         <button class="icon-btn btn-dislike" type="button" title="Плохой ответ" aria-pressed="false">${ICONS.dislike}</button>
@@ -147,6 +150,11 @@ export function createAssistantMessage({ onRetry } = {}) {
     e.currentTarget.title = "Скопировано";
   });
   retryBtn.addEventListener("click", () => onRetry?.());
+  // 🔊 — прочитать этот ответ (повторный клик во время чтения — остановить)
+  msg.querySelector(".btn-speak").addEventListener("click", () => {
+    if (isSpeaking()) stopSpeaking();
+    else speak(shownText(), { force: true });
+  });
 
   // ---------- 👍 / 👎 / «Исправить» ----------
 

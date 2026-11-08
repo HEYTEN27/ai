@@ -23,7 +23,8 @@ def _send(client, conv_id, content, **kwargs):
 def test_health(client):
     data = client.get("/api/health").json()
     assert data == {
-        "backend": "ollama", "assistant_name": "Джарвис", "ok": True, "version": "0.34.4-fake", "error": None,
+        "backend": "ollama", "assistant_name": "Джарвис", "ui_theme": "hud", "address": "сэр",
+        "ok": True, "version": "0.34.4-fake", "error": None,
     }
 
 

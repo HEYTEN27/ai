@@ -43,7 +43,7 @@ def test_like_creates_snapshot_and_sft_example(client):
 
     data = _rate(client, answer["id"], 1)
     ex = data["example"]
-    assert ex["rating"] == 1 and ex["in_sft"] is True and ex["persona"] == "Универсальный"
+    assert ex["rating"] == 1 and ex["in_sft"] is True and ex["persona"] == "Джарвис"
     assert ex["question"] == "Объясни замыкания коротко"
     assert [m["role"] for m in ex["history"]] == ["user", "assistant"], "предыдущий обмен — в истории"
     assert ex["system_prompt"].startswith("Тебя зовут Джарвис")

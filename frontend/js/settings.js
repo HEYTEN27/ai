@@ -82,6 +82,8 @@ async function openSettings({ getModels, getPersonas }) {
   hideError();
 
   $("set-name").value = v.assistant_name;
+  $("set-address").value = v.address;
+  $("set-theme").value = v.ui_theme;
   $("set-prompt").value = v.system_prompt;
 
   // Модель по умолчанию: скачанные модели + сохранённая, даже если её сейчас нет
@@ -186,6 +188,8 @@ async function saveGeneral(e) {
   hideError();
   const changes = {
     assistant_name: $("set-name").value.trim(),
+    address: $("set-address").value.trim() || "сэр",
+    ui_theme: $("set-theme").value,
     system_prompt: $("set-prompt").value,
     default_model: $("set-model").value,
     default_persona_id: $("set-persona").value ? Number($("set-persona").value) : null,

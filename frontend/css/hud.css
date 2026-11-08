@@ -1,0 +1,320 @@
+/* =====================================================================
+   Тема «HUD» — голографический интерфейс в духе фантастики.
+   Все правила действуют только при <html data-theme="hud">, классическая
+   тема (style.css) остаётся как была.
+
+   Приёмы:
+     * цвета — через те же CSS-переменные, что и в style.css, поэтому почти
+       весь интерфейс перекрашивается сам;
+     * «угловые скобки» у панелей рисуются восемью линейными градиентами
+       в фоне (переменная --brackets) — без лишних элементов в HTML;
+     * сетка и «скан-линии» на фоне — тоже градиенты.
+   Шрифты (лежат локально, лицензия OFL): Exo 2 — текст, Jura — подписи
+   и заголовки (обе с кириллицей), Orbitron — латинские «системные» надписи.
+   ===================================================================== */
+
+@font-face { font-family: "Exo 2"; font-weight: 400; font-display: swap; src: url("../vendor/fonts/exo-2-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Exo 2"; font-weight: 400; font-display: swap; src: url("../vendor/fonts/exo-2-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Exo 2"; font-weight: 500; font-display: swap; src: url("../vendor/fonts/exo-2-cyrillic-500-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Exo 2"; font-weight: 500; font-display: swap; src: url("../vendor/fonts/exo-2-latin-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Exo 2"; font-weight: 600; font-display: swap; src: url("../vendor/fonts/exo-2-cyrillic-600-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Exo 2"; font-weight: 600; font-display: swap; src: url("../vendor/fonts/exo-2-latin-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Jura"; font-weight: 500; font-display: swap; src: url("../vendor/fonts/jura-cyrillic-500-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Jura"; font-weight: 500; font-display: swap; src: url("../vendor/fonts/jura-latin-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Jura"; font-weight: 600; font-display: swap; src: url("../vendor/fonts/jura-cyrillic-600-normal.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Jura"; font-weight: 600; font-display: swap; src: url("../vendor/fonts/jura-latin-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Orbitron"; font-weight: 500; font-display: swap; src: url("../vendor/fonts/orbitron-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Orbitron"; font-weight: 700; font-display: swap; src: url("../vendor/fonts/orbitron-latin-700-normal.woff2") format("woff2"); }
+
+/* ---------- палитра и общие приёмы ---------- */
+
+:root[data-theme="hud"] {
+  --bg: #02070f;
+  --bg-sidebar: rgba(3, 11, 22, .94);
+  --bg-elevated: rgba(9, 28, 48, .8);
+  --bg-hover: rgba(63, 217, 255, .07);
+  --bg-active: rgba(63, 217, 255, .13);
+  --bg-user: rgba(63, 217, 255, .07);
+  --bg-code: rgba(1, 6, 14, .92);
+  --border: rgba(86, 205, 255, .24);
+  --text: #d9f4ff;
+  --text-muted: #8fb5c9;
+  --text-faint: #567a8e;
+  --accent: #3fd9ff;
+  --accent-text: #00121c;
+  --ok: #45f0b5;
+  --warn: #ffb648;
+  --danger: #ff5b6e;
+  --radius: 4px;
+  --font: "Exo 2", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-hud: "Jura", "Exo 2", sans-serif;
+  --font-sys: "Orbitron", "Jura", sans-serif;
+  --hud-line: rgba(63, 217, 255, .7);
+  --panel: rgba(6, 20, 36, .62);
+  --glow: 0 0 14px rgba(63, 217, 255, .35);
+  /* Угловые скобки: 4 угла × (горизонтальная + вертикальная черта) */
+  --brackets:
+    linear-gradient(var(--hud-line), var(--hud-line)) left top / 12px 1.5px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) left top / 1.5px 12px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) right top / 12px 1.5px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) right top / 1.5px 12px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) left bottom / 12px 1.5px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) left bottom / 1.5px 12px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) right bottom / 12px 1.5px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) right bottom / 1.5px 12px no-repeat;
+  color-scheme: dark;
+}
+
+[data-theme="hud"] body {
+  background:
+    radial-gradient(1100px 560px at 62% -12%, rgba(30, 140, 255, .17), transparent 62%),
+    radial-gradient(900px 520px at 8% 112%, rgba(0, 220, 255, .08), transparent 60%),
+    linear-gradient(rgba(63, 217, 255, .032) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgba(63, 217, 255, .032) 1px, transparent 1px) 0 0 / 44px 44px,
+    #02070f;
+  background-attachment: fixed;
+  letter-spacing: .01em;
+}
+/* «Скан-линии» поверх всего — едва заметно, клики не перехватывают */
+[data-theme="hud"] body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 60;
+  background: repeating-linear-gradient(to bottom, rgba(140, 220, 255, .022) 0 1px, transparent 1px 3px);
+}
+[data-theme="hud"] ::selection { background: rgba(63, 217, 255, .32); }
+[data-theme="hud"] ::-webkit-scrollbar-thumb { background: rgba(63, 217, 255, .22); background-clip: padding-box; }
+
+/* ---------- ядро ---------- */
+
+.core { width: 100%; height: 100%; overflow: visible; display: block; }
+.core .ring { fill: none; stroke: var(--core-color, #3fd9ff); transform-box: fill-box; transform-origin: center; }
+.core .r-outer { stroke-width: 1.2; stroke-dasharray: 2 5; opacity: .7; animation: core-spin var(--spin1, 48s) linear infinite; }
+.core .r-thin { stroke-width: .6; opacity: .3; }
+.core .r-mid { transform-box: fill-box; transform-origin: center; animation: core-spin var(--spin2, 26s) linear infinite reverse; }
+.core .r-mid-arc { stroke-width: 5; stroke-dasharray: 88 14 26 14 120 14 40 14 90 67.5; opacity: .78; }
+.core .notch { fill: var(--core-color, #3fd9ff); }
+.core .r-ticks { stroke-width: 7; stroke-dasharray: 1.3 5.2; opacity: .45; animation: core-spin var(--spin3, 70s) linear infinite; }
+.core .r-inner { stroke-width: 2.6; stroke-dasharray: 110 44; animation: core-spin var(--spin4, 9s) linear infinite; }
+.core .r-inner2 { stroke-width: 1; stroke-dasharray: 4 3; opacity: .6; animation: core-spin var(--spin5, 15s) linear infinite reverse; }
+.core .core-glow { transform-box: fill-box; transform-origin: center; animation: core-pulse var(--pulse, 3.4s) ease-in-out infinite; }
+.core .core-dot { fill: #effdff; }
+.core-big, .core-boot { filter: drop-shadow(0 0 10px rgba(63, 217, 255, .55)) drop-shadow(0 0 28px rgba(0, 150, 255, .35)); }
+.core-mini { filter: drop-shadow(0 0 4px rgba(63, 217, 255, .7)); }
+
+/* Состояния: думает — быстрее; говорит — пульсирует; слушает — тёплый цвет */
+body[data-core="thinking"] { --spin1: 14s; --spin2: 6s; --spin3: 22s; --spin4: 2s; --spin5: 3.5s; --pulse: 1.1s; }
+body[data-core="speaking"] { --spin2: 12s; --spin4: 4s; --pulse: .5s; }
+body[data-core="listening"] { --core-color: #ffb648; --spin4: 3s; --pulse: .8s; }
+body[data-core="listening"] .core .core-dot { fill: #fff3df; }
+
+@keyframes core-spin { to { transform: rotate(360deg); } }
+@keyframes core-pulse { 0%, 100% { transform: scale(.86); opacity: .72; } 50% { transform: scale(1.08); opacity: 1; } }
+
+/* ---------- боковая панель ---------- */
+
+[data-theme="hud"] .sidebar {
+  border-right: 1px solid transparent;
+  border-image: linear-gradient(to bottom, transparent, rgba(63, 217, 255, .45), transparent) 1;
+  backdrop-filter: blur(6px);
+}
+[data-theme="hud"] .brand { gap: 12px; padding: 2px 4px 6px; }
+[data-theme="hud"] .brand-logo { display: none; }
+[data-theme="hud"] .brand-core { display: block; width: 34px; height: 34px; flex-shrink: 0; }
+[data-theme="hud"] .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+[data-theme="hud"] #assistant-name {
+  font-family: var(--font-hud); font-weight: 600; font-size: 17px; letter-spacing: .24em; text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(63, 217, 255, .55);
+}
+[data-theme="hud"] .brand-sub { display: block; font-family: var(--font-sys); font-size: 8.5px; letter-spacing: .28em; color: var(--text-faint); }
+
+[data-theme="hud"] .btn {
+  border-radius: 3px; font-family: var(--font-hud); font-weight: 600; letter-spacing: .05em;
+  border-color: var(--border); transition: border-color .15s, box-shadow .15s, background .15s;
+}
+[data-theme="hud"] .btn:hover { border-color: var(--accent); box-shadow: var(--glow); background: rgba(63, 217, 255, .06); }
+[data-theme="hud"] .btn-new { background: var(--brackets), rgba(63, 217, 255, .06); border-color: rgba(63, 217, 255, .35); text-transform: uppercase; font-size: 13px; }
+[data-theme="hud"] .btn-primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); box-shadow: var(--glow); }
+[data-theme="hud"] .btn-primary:hover { background: #8beaff; }
+[data-theme="hud"] .btn-nav { text-transform: uppercase; font-size: 12.5px; letter-spacing: .12em; border: 0; border-left: 2px solid transparent; border-radius: 0; }
+[data-theme="hud"] .btn-nav.active {
+  background: linear-gradient(90deg, rgba(63, 217, 255, .17), transparent); border-left-color: var(--accent);
+  color: var(--text); box-shadow: none;
+}
+[data-theme="hud"] .conv-group { font-family: var(--font-hud); text-transform: uppercase; letter-spacing: .2em; font-size: 10.5px; }
+[data-theme="hud"] .conv-item { border-radius: 2px; border-left: 2px solid transparent; }
+[data-theme="hud"] .conv-item.active { background: linear-gradient(90deg, rgba(63, 217, 255, .14), transparent); border-left-color: var(--accent); }
+[data-theme="hud"] .sidebar-footer, [data-theme="hud"] .settings-head, [data-theme="hud"] .memory-danger { border-color: rgba(63, 217, 255, .15); }
+[data-theme="hud"] .conn-text { font-family: var(--font-hud); letter-spacing: .06em; }
+[data-theme="hud"] .is-ok .dot { box-shadow: 0 0 8px var(--ok); }
+[data-theme="hud"] .is-warn .dot { box-shadow: 0 0 8px var(--warn); }
+[data-theme="hud"] .is-error .dot { box-shadow: 0 0 8px var(--danger); }
+
+/* ---------- верхняя панель ---------- */
+
+[data-theme="hud"] .topbar {
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, rgba(63, 217, 255, .4) 20%, rgba(63, 217, 255, .4) 80%, transparent) 1;
+  background: linear-gradient(to bottom, rgba(2, 10, 20, .85), rgba(2, 10, 20, .35));
+}
+[data-theme="hud"] .model-picker select, [data-theme="hud"] .persona-picker select { font-family: var(--font-hud); letter-spacing: .03em; border-radius: 3px; }
+[data-theme="hud"] .model-picker select { font-weight: 600; text-shadow: 0 0 8px rgba(63, 217, 255, .35); }
+/* На компьютере часы и индикаторы не сжимаются — место уступает выпадающий список модели
+   (на телефоне действуют правила из style.css) */
+@media (min-width: 769px) {
+  [data-theme="hud"] .model-picker select { max-width: min(46vw, 320px); }
+  [data-theme="hud"] .topbar > :is(.vram, .tts-toggle, .hud-clock, .toggle) { flex-shrink: 0; }
+}
+[data-theme="hud"] .toggle-label, [data-theme="hud"] .vram { font-family: var(--font-hud); letter-spacing: .05em; }
+[data-theme="hud"] .vram-text { text-transform: uppercase; }
+[data-theme="hud"] .hud-clock {
+  display: flex; flex-direction: column; align-items: flex-end; line-height: 1.05; padding-left: 12px; margin-left: 4px;
+  border-left: 1px solid var(--border);
+}
+[data-theme="hud"] .hud-clock b { font-family: var(--font-sys); font-weight: 500; font-size: 15px; letter-spacing: .08em; color: var(--text); text-shadow: 0 0 8px rgba(63, 217, 255, .5); }
+[data-theme="hud"] .hud-clock i { font-style: normal; opacity: .55; }
+[data-theme="hud"] .hud-clock span { font-family: var(--font-hud); font-size: 10px; letter-spacing: .2em; color: var(--text-faint); }
+[data-theme="hud"] .banner { border-radius: 3px; background: var(--brackets), rgba(255, 182, 72, .07); --hud-line: rgba(255, 182, 72, .8); }
+[data-theme="hud"] .banner.is-error { background: var(--brackets), rgba(255, 91, 110, .08); --hud-line: rgba(255, 91, 110, .8); }
+
+/* ---------- пустой экран ---------- */
+
+[data-theme="hud"] .empty { margin-top: 5vh; }
+[data-theme="hud"] .empty-core { display: block; width: 200px; height: 200px; margin: 0 auto 22px; }
+[data-theme="hud"] .empty h1 {
+  font-family: var(--font-hud); font-weight: 600; font-size: 32px; letter-spacing: .04em; min-height: 1.3em;
+  text-shadow: 0 0 18px rgba(63, 217, 255, .45);
+}
+[data-theme="hud"] .greeting-sub {
+  font-family: var(--font-hud); font-weight: 600; text-transform: uppercase; letter-spacing: .22em; font-size: 13px;
+  color: var(--accent); margin: 0 0 6px !important;
+}
+[data-theme="hud"] .suggestion {
+  border-radius: 2px; background: var(--brackets), rgba(6, 20, 36, .55); border-color: rgba(63, 217, 255, .16);
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+[data-theme="hud"] .suggestion:hover { border-color: rgba(63, 217, 255, .5); box-shadow: var(--glow); transform: translateY(-1px); }
+
+/* ---------- сообщения ---------- */
+
+[data-theme="hud"] .msg-user .bubble {
+  border-radius: 2px; background: var(--brackets), rgba(63, 217, 255, .07);
+  border: 1px solid rgba(63, 217, 255, .16); --hud-line: rgba(63, 217, 255, .55);
+}
+[data-theme="hud"] .msg-assistant::before {
+  content: "◈ " var(--assistant-label, "АССИСТЕНТ");
+  display: block; margin-bottom: 6px; font-family: var(--font-hud); font-weight: 600; font-size: 11px;
+  letter-spacing: .28em; color: var(--accent); text-shadow: 0 0 8px rgba(63, 217, 255, .5);
+}
+[data-theme="hud"] .msg-assistant .content {
+  border-left: 2px solid rgba(63, 217, 255, .45); padding-left: 16px;
+  box-shadow: -10px 0 18px -14px rgba(63, 217, 255, .8);
+}
+[data-theme="hud"] .msg.streaming .content::after { background: var(--accent); box-shadow: var(--glow); }
+[data-theme="hud"] .waiting { font-family: var(--font-hud); letter-spacing: .06em; color: var(--accent); }
+[data-theme="hud"] .waiting::before { border-color: rgba(63, 217, 255, .25); border-top-color: var(--accent); }
+[data-theme="hud"] .msg-meta { font-family: var(--font-hud); letter-spacing: .03em; }
+[data-theme="hud"] .thinking { border-left-color: rgba(255, 182, 72, .45); }
+[data-theme="hud"] .thinking summary { font-family: var(--font-hud); text-transform: uppercase; letter-spacing: .14em; font-size: 12px; }
+[data-theme="hud"] .content h1, [data-theme="hud"] .content h2, [data-theme="hud"] .content h3 { font-family: var(--font-hud); letter-spacing: .03em; }
+[data-theme="hud"] .content th { background: rgba(63, 217, 255, .08); }
+[data-theme="hud"] .code-block { border-radius: 3px; border-color: var(--border); box-shadow: inset 0 0 0 1px rgba(63, 217, 255, .04); }
+[data-theme="hud"] .code-header { background: rgba(63, 217, 255, .07); font-family: var(--font-hud); text-transform: uppercase; letter-spacing: .14em; }
+[data-theme="hud"] .cite { border-radius: 2px; }
+[data-theme="hud"] .source-chip, [data-theme="hud"] .ds-badge, [data-theme="hud"] .ds-filter { border-radius: 2px; }
+
+/* ---------- поле ввода ---------- */
+
+[data-theme="hud"] .composer-box {
+  border-radius: 3px; background: var(--brackets), rgba(5, 18, 33, .88);
+  border-color: rgba(63, 217, 255, .22); transition: border-color .15s, box-shadow .15s;
+}
+[data-theme="hud"] .composer-box:focus-within { border-color: rgba(63, 217, 255, .6); box-shadow: var(--glow); }
+[data-theme="hud"] .send-btn { background: var(--accent); color: var(--accent-text); box-shadow: var(--glow); }
+[data-theme="hud"] .send-btn:disabled { background: rgba(63, 217, 255, .14); color: rgba(63, 217, 255, .45); box-shadow: none; }
+[data-theme="hud"] .composer-hint, [data-theme="hud"] .kb-scope { font-family: var(--font-hud); letter-spacing: .1em; text-transform: uppercase; font-size: 11px; }
+[data-theme="hud"] .mic-btn.recording { background: var(--warn); color: #241400; box-shadow: 0 0 16px rgba(255, 182, 72, .6); }
+[data-theme="hud"] .mic-timer { color: var(--warn); font-family: var(--font-sys); }
+
+/* ---------- панели и окна ---------- */
+
+[data-theme="hud"] .settings {
+  border-radius: 4px; border-color: rgba(63, 217, 255, .3);
+  background: var(--brackets), rgba(3, 11, 22, .97);
+  box-shadow: 0 0 0 1px rgba(63, 217, 255, .05), 0 0 50px rgba(0, 150, 255, .16), 0 30px 80px rgba(0, 0, 0, .7);
+}
+[data-theme="hud"] .settings::backdrop { background: rgba(0, 4, 10, .72); backdrop-filter: blur(3px); }
+[data-theme="hud"] .settings-head h2, [data-theme="hud"] .memory-head h1, [data-theme="hud"] .tr-step h2,
+[data-theme="hud"] .kb-card h3, [data-theme="hud"] .set-section {
+  font-family: var(--font-hud); letter-spacing: .06em; font-weight: 600;
+}
+[data-theme="hud"] .memory-head h1 { text-transform: uppercase; letter-spacing: .14em; text-shadow: 0 0 14px rgba(63, 217, 255, .4); }
+[data-theme="hud"] .tab { border-radius: 2px; font-family: var(--font-hud); font-weight: 600; letter-spacing: .05em; }
+[data-theme="hud"] .tab.active { background: rgba(63, 217, 255, .14); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+[data-theme="hud"] .field label, [data-theme="hud"] .field-label, [data-theme="hud"] .ds-a-label, [data-theme="hud"] .t-label,
+[data-theme="hud"] .memory-group h3 { font-family: var(--font-hud); letter-spacing: .06em; }
+
+/* Панели с прямо прописанными в style.css цветами — переводим на голографические */
+[data-theme="hud"] :is(.kb-card, .vram-estimate, .fact-form, .fact-edit, .ds-progress-card, .correct-box, .tr-progress,
+  .tool-card, .kb-collection, .tr-step, .tool-setting, .ds-item, .memory-empty, .source-text, .export-menu, .ds-edit textarea) {
+  background-color: var(--panel); border-color: var(--border); border-radius: 3px;
+}
+[data-theme="hud"] :is(.kb-card, .tr-step, .ds-progress-card, .tool-setting, .vram-estimate, .memory-empty, .kb-collection) {
+  background: var(--brackets), var(--panel);
+}
+[data-theme="hud"] .kb-collection-head, [data-theme="hud"] .code-header { background-color: rgba(63, 217, 255, .06); }
+[data-theme="hud"] :is(.persona-list, .set-section, .journal-item, .tool-body) { border-color: rgba(63, 217, 255, .14) !important; }
+[data-theme="hud"] .settings :is(input:not([type=range]):not([type=checkbox]):not([type=radio]), select, textarea),
+[data-theme="hud"] :is(.memory-toolbar input, .kb-card input, .kb-card select, .tr-form input, .fact-form input, .fact-edit textarea, .correct-box textarea) {
+  border-radius: 2px; background: rgba(2, 10, 20, .7);
+}
+[data-theme="hud"] .tool-card.st-waiting { --hud-line: rgba(255, 182, 72, .9); background: var(--brackets), var(--panel); }
+[data-theme="hud"] .tool-head .t-title, [data-theme="hud"] .tr-num { font-family: var(--font-hud); letter-spacing: .05em; }
+[data-theme="hud"] .tr-num { box-shadow: var(--glow); }
+[data-theme="hud"] .vram-bar, [data-theme="hud"] .ds-bar, [data-theme="hud"] .kb-progress { border-radius: 1px; background: rgba(63, 217, 255, .1); }
+[data-theme="hud"] .ds-bar span, [data-theme="hud"] .kb-progress span { box-shadow: var(--glow); }
+[data-theme="hud"] .toggle-track { background: rgba(63, 217, 255, .16); }
+[data-theme="hud"] .toggle input:checked + .toggle-track { box-shadow: var(--glow); }
+
+/* ---------- кнопка озвучивания ---------- */
+
+body[data-core="speaking"] .tts-toggle { color: var(--accent); box-shadow: var(--glow); }
+
+/* ---------- загрузочная заставка ---------- */
+
+.boot {
+  position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; color: #d9f4ff; font-family: "Jura", sans-serif; cursor: pointer;
+  background:
+    radial-gradient(700px 420px at 50% 42%, rgba(30, 150, 255, .2), transparent 70%),
+    linear-gradient(rgba(63, 217, 255, .04) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgba(63, 217, 255, .04) 1px, transparent 1px) 0 0 / 44px 44px,
+    #02070f;
+  transition: opacity .45s ease;
+}
+.boot.leaving { opacity: 0; }
+.boot-core { width: 220px; height: 220px; margin-bottom: 18px; animation: boot-in .9s cubic-bezier(.2, .9, .3, 1.2) both; }
+.boot-title { font-weight: 600; font-size: 30px; letter-spacing: .55em; padding-left: .55em; text-shadow: 0 0 18px rgba(63, 217, 255, .7); }
+.boot-sub { font-family: "Orbitron", sans-serif; font-size: 10px; letter-spacing: .4em; color: #567a8e; margin-bottom: 18px; }
+.boot-lines { list-style: none; margin: 0; padding: 0; width: min(560px, 88vw); min-height: 130px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+.boot-lines li { display: flex; gap: 10px; padding: 3px 0; animation: line-in .25s ease-out both; color: #8fb5c9; }
+.boot-lines li .t { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.boot-lines li .t::after { content: " ····································································"; color: rgba(63, 217, 255, .25); }
+.boot-lines li .s { color: #45f0b5; font-family: "Orbitron", sans-serif; }
+.boot-lines li.warn .s, .boot-lines li.warn .t { color: #ffb648; }
+.boot-greeting { font-size: 26px; font-weight: 600; letter-spacing: .06em; min-height: 1.4em; opacity: 0; transform: translateY(6px); transition: opacity .4s, transform .4s; text-shadow: 0 0 16px rgba(63, 217, 255, .6); }
+.boot.greet .boot-greeting { opacity: 1; transform: none; }
+.boot-skip { position: absolute; bottom: 24px; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: #3d5a6b; }
+@keyframes boot-in { from { transform: scale(.4) rotate(-90deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes line-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- узкие экраны и «меньше анимаций» ---------- */
+
+@media (max-width: 768px) {
+  [data-theme="hud"] .hud-clock { display: none; }
+  [data-theme="hud"] .empty-core { width: 140px; height: 140px; margin-bottom: 14px; }
+  [data-theme="hud"] .empty h1 { font-size: 24px; }
+  .boot-core { width: 160px; height: 160px; }
+  .boot-title { font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .core * { animation: none !important; }
+}

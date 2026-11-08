@@ -64,7 +64,7 @@ def test_settings_validation(client):
 
 def test_builtin_personas(client):
     p = _personas(client)
-    assert list(p)[:4] == ["universal", "teacher", "programmer", "editor"]
+    assert list(p)[:5] == ["jarvis", "universal", "teacher", "programmer", "editor"], "Джарвис — первым"
     assert p["programmer"]["temperature"] == 0.3
     assert all(x["builtin"] for x in p.values())
 
@@ -111,11 +111,40 @@ def test_persona_prompt_and_options_sent_to_model(client):
                               "repeat_penalty": 1.0}
 
 
-def test_default_persona_is_universal(client):
-    _chat(client)
+def test_default_persona_is_jarvis_with_address(client):
+    _, events = _chat(client)
+    assert events[0][1]["persona_id"] == _personas(client)["jarvis"]["id"]
     system = _sent()["messages"][0]["content"]
-    assert "Сейчас ты в роли" not in system  # у «Универсального» нет доп. инструкции
+    assert "ИИ-дворецкий" in system and "Обращайся к пользователю «сэр»" in system and "{address}" not in system
+    client.put("/api/settings", json={"address": "мисс"})
+    _chat(client)
+    assert "«Да, мисс.»" in _sent()["messages"][0]["content"], "обращение подставляется из настроек"
+
+
+def test_universal_persona_has_no_extra_instruction(client):
+    _chat(client, persona_id=_personas(client)["universal"]["id"])
+    system = _sent()["messages"][0]["content"]
+    assert "Сейчас ты в роли" not in system and "дворецкий" not in system
     assert _sent()["options"]["temperature"] == 0.7
+
+
+def test_theme_and_address_validation(client):
+    assert client.put("/api/settings", json={"ui_theme": "classic"}).json()["values"]["ui_theme"] == "classic"
+    for bad in ({"ui_theme": "neon"}, {"address": ""}, {"address": "x" * 31}, {"tts_rate": 3}):
+        assert client.put("/api/settings", json=bad).status_code == 422, bad
+    assert client.get("/api/health").json()["ui_theme"] == "classic"
+
+
+def test_jarvis_persona_added_to_existing_database(client):
+    """У пользователя база с 4 персонами из этапа 2 — «Джарвис» добавляется при запуске и встаёт первым."""
+    from backend.db import get_conn
+    from backend.settings.personas import ensure_builtin
+
+    with get_conn() as conn:
+        conn.execute("DELETE FROM personas WHERE slug = 'jarvis'")
+    assert "jarvis" not in _personas(client)
+    ensure_builtin()
+    assert list(_personas(client))[0] == "jarvis"
 
 
 def test_default_persona_setting(client):
@@ -173,6 +202,7 @@ def test_num_predict_limits_answer(client):
 
 def test_render_and_date():
     assert render("{name} {unknown} {{x}}", {"name": "Д"}) == "Д {unknown} {{x}}"
+    assert render("Да, {address}.", {"address": "сэр"}) == "Да, сэр."
     assert today_text(datetime(2026, 11, 7)) == "7 ноября 2026 года, суббота"
 
 

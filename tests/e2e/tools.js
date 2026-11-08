@@ -79,6 +79,7 @@ async function send(page, text, { waitDone = true } = {}) {
   await page.click('#settings-btn');
   await page.click('.tab[data-tab=tools]');
   await page.waitForSelector('#tools-form:not([hidden])');
+  await page.waitForSelector('#t-confirm-python:checked'); // значения приходят с сервера чуть позже формы
   assert(await page.isChecked('#t-confirm-python') && !(await page.isChecked('#t-confirm-web')), 'по умолчанию: код — с подтверждением, поиск — без');
   await page.fill('#t-root', path.join(dir, 'нет такой'));
   await page.click('#t-root-check');

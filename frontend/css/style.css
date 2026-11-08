@@ -425,6 +425,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 @media (max-width: 768px) {
   .persona-picker select { max-width: 34vw; font-size: 14px; padding: 6px 4px; }
   .model-picker select { font-size: 14px; max-width: 34vw; }
+  /* Если кнопок в панели много (озвучка), списки сжимаются, а не вылезают за экран */
+  .persona-picker, .model-picker { min-width: 0; }
+  .persona-picker select, .model-picker select { width: 100%; }
   .settings { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; margin: 0; }
   .settings-head { padding: 10px 12px 10px 16px; gap: 8px; }
   /* Три вкладки не помещаются рядом с заголовком — на телефоне заголовок прячем, вкладки прокручиваются */
@@ -838,3 +841,22 @@ a.btn { text-decoration: none; }
 .set-section { font-size: 15px; margin: 4px 0 10px; }
 .set-section:not(:first-child) { margin-top: 22px; padding-top: 16px; border-top: 1px solid #2c2c2c; }
 #data-form code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-elevated); padding: 1px 5px; border-radius: 4px; }
+
+/* =====================================================================
+   Оформление: элементы темы HUD (css/hud.css) в классической теме скрыты
+   ===================================================================== */
+.brand-core, .brand-sub, .empty-core, .hud-clock { display: none; }
+.greeting-sub:empty { display: none; }
+.brand-text { display: contents; }
+
+/* Кнопка «Озвучивать ответы» (в обеих темах) */
+.tts-toggle[hidden] { display: none; }
+.tts-toggle .icon-off { display: none; }
+.tts-toggle[aria-pressed="false"] .icon-on { display: none; }
+.tts-toggle[aria-pressed="false"] .icon-off { display: block; }
+.tts-toggle[aria-pressed="false"] { color: var(--text-faint); }
+/* 🔊 под ответом — только если в системе есть русский офлайн-голос */
+.msg-meta .btn-speak { display: none; }
+body.tts-ready .msg-meta .btn-speak { display: inline-flex; }
+.sounds-check { margin-top: 10px; }
+#tts-rate { width: 100%; accent-color: var(--accent); }

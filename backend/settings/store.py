@@ -87,6 +87,13 @@ def defaults() -> dict:
         "voice_enabled": True,
         "whisper_model": "small",  # tiny | base | small | medium
         "voice_language": "ru",  # ru | en | auto (определять самостоятельно)
+        # --- Оформление и «характер» ---
+        "ui_theme": "hud",  # hud — голографический интерфейс, classic — простая тёмная тема
+        "address": "сэр",  # как ассистент обращается к пользователю (подстановка {address})
+        "tts_enabled": True,  # озвучивать ответы встроенным голосом Windows (офлайн)
+        "tts_voice": "",  # имя голоса; пусто — выбрать русский мужской автоматически
+        "tts_rate": 1.0,  # скорость речи
+        "ui_sounds": True,  # тихие звуки интерфейса
     }
 
 
@@ -126,7 +133,8 @@ def _validate(key: str, value):
         if not 0 <= value <= 16:
             raise SettingsError("Занято другими программами: от 0 до 16 ГиБ")
     elif key in ("memory_enabled", "memory_autosave", "embedding_on_gpu", "tools_enabled", "tool_calculator",
-                 "tool_web", "tool_files", "tool_python", "confirm_python", "confirm_web", "voice_enabled"):
+                 "tool_web", "tool_files", "tool_python", "confirm_python", "confirm_web", "voice_enabled",
+                 "tts_enabled", "ui_sounds"):
         if not isinstance(value, bool):
             raise SettingsError("Ожидается да/нет (true/false)")
     elif key == "memory_budget_tokens":
@@ -168,6 +176,19 @@ def _validate(key: str, value):
         value = str(value).strip().rstrip("/")
         if value and not value.startswith(("http://", "https://")):
             raise SettingsError("Адрес SearXNG должен начинаться с http:// или https://")
+    elif key == "ui_theme":
+        if value not in ("hud", "classic"):
+            raise SettingsError("Тема: hud или classic")
+    elif key == "address":
+        value = str(value).strip()
+        if not 1 <= len(value) <= 30:
+            raise SettingsError("Обращение: от 1 до 30 символов (например, «сэр», «мисс», «босс»)")
+    elif key == "tts_voice":
+        value = str(value).strip()[:200]
+    elif key == "tts_rate":
+        value = float(value)
+        if not 0.5 <= value <= 2.0:
+            raise SettingsError("Скорость речи: от 0.5 до 2")
     elif key == "whisper_model":
         if value not in ("tiny", "base", "small", "medium"):
             raise SettingsError("Модель распознавания: tiny, base, small или medium")

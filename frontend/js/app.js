@@ -20,6 +20,12 @@ import {
 import { initDatasetPage, refreshDatasetPage } from "./dataset.js";
 import { initTrainingPage, refreshTrainingPage } from "./training.js";
 import { initVoice } from "./voice.js";
+import { runBoot } from "./boot.js";
+import { applyTheme, currentTheme, initHud, renderGreeting, setCoreState, setIdentity, waitingText } from "./hud.js";
+import { play, setSoundsEnabled } from "./sounds.js";
+import { configureSpeech, onVoicesReady, pickVoice, speak, stopSpeaking } from "./speech.js";
+
+initHud(); // ядро, часы — до загрузки данных, чтобы интерфейс сразу выглядел готовым
 import { initKnowledgePage, refreshKnowledgePage } from "./knowledge.js";
 import { initMemoryPage, refreshMemoryPage } from "./memory.js";
 import { initSettings } from "./settings.js";
@@ -223,6 +229,7 @@ function newChat() {
   setPersonaSelect(state.defaultPersonaId);
   setKnowledgeScope("all");
   clearMessages();
+  renderGreeting(true);
   refreshConversations();
   closeSidebar();
   input.focus();
@@ -406,7 +413,10 @@ async function regenerate() {
 async function streamAnswer(startRequest) {
   const bubble = createAssistantMessage({ onRetry: regenerate });
   const loaded = state.lastStatus?.loaded?.some((m) => m.name === selectedModel());
-  bubble.setWaiting(loaded ? "Думаю…" : "Загружаю модель в видеопамять…");
+  bubble.setWaiting(waitingText(loaded));
+  stopSpeaking(); // новый вопрос — прерываем чтение прошлого ответа
+  setCoreState("thinking");
+  play("send");
 
   const controller = new AbortController();
   state.abortController = controller;
@@ -445,10 +455,15 @@ async function streamAnswer(startRequest) {
       finished = true;
       bubble.finish({ message: data.message, memoryFacts, sources });
       release();
+      setCoreState("idle");
+      play("done");
+      if (data.message?.content) speak(data.message.content); // озвучка — если включена и есть голос
     } else if (event === "error") {
       finished = true;
       bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources });
       release();
+      setCoreState("idle");
+      play("error");
     } else if (event === "tool_start") {
       bubble.toolStart(data);
     } else if (event === "tool_confirm") {
@@ -495,7 +510,9 @@ async function undoMemoryEvent(ev) {
 }
 
 function stopGeneration() {
+  if (state.abortController) play("stop");
   state.abortController?.abort();
+  setCoreState("idle");
 }
 
 /** Кнопка отправки превращается в «Стоп» на время генерации. */
@@ -595,6 +612,8 @@ async function checkHealth() {
     const health = await api.health();
     renderConnection(health);
     applyAssistantName(health.assistant_name);
+    setIdentity({ name: health.assistant_name, address: health.address });
+    if (health.ui_theme && health.ui_theme !== currentTheme()) applyTheme(health.ui_theme);
     return health.ok;
   } catch {
     renderConnection({ ok: false });
@@ -607,7 +626,6 @@ function applyAssistantName(name) {
   if (!name) return;
   document.title = name;
   $("assistant-name").textContent = name;
-  $("greeting").textContent = `${name} на связи. Чем помочь?`;
   $("knowledge-sub").textContent =
     `Документы, по которым ${name} отвечает со ссылками на источник. Всё хранится и обрабатывается на этом компьютере.`;
   $("memory-sub").textContent =
@@ -624,8 +642,43 @@ function escapeHtml(s) {
 // Запуск
 // =====================================================================
 
+// =====================================================================
+// Озвучивание ответов и звуки
+// =====================================================================
+
+const ttsToggle = $("tts-toggle");
+
+async function applyVoiceSettings() {
+  const { values } = await api.getSettings().catch(() => ({ values: null }));
+  if (!values) return;
+  configureSpeech(values);
+  setSoundsEnabled(values.ui_sounds);
+  ttsToggle.setAttribute("aria-pressed", String(values.tts_enabled));
+  updateTtsAvailability();
+}
+
+/** Кнопка 🔊 видна, только если в системе есть русский офлайн-голос. */
+function updateTtsAvailability() {
+  const voice = pickVoice();
+  ttsToggle.hidden = !voice;
+  document.body.classList.toggle("tts-ready", Boolean(voice));
+  if (voice) ttsToggle.title = `Озвучивать ответы — голос «${voice.name}» (офлайн)`;
+}
+onVoicesReady(updateTtsAvailability);
+window.addEventListener("voice-settings-changed", applyVoiceSettings);
+
+ttsToggle.addEventListener("click", async () => {
+  const enabled = ttsToggle.getAttribute("aria-pressed") !== "true";
+  ttsToggle.setAttribute("aria-pressed", String(enabled));
+  configureSpeech({ tts_enabled: enabled });
+  if (!enabled) stopSpeaking();
+  await api.updateSettings({ tts_enabled: enabled }).catch(() => {});
+});
+
 async function init() {
   const ok = await checkHealth();
+  runBoot(); // заставка (один раз за сеанс, тема HUD) — поверх загрузки, не ждём её
+  applyVoiceSettings();
   await Promise.all([loadModels(), loadPersonas(), loadMemoryCache(), refreshKnowledgeScope()]);
   await refreshConversations();
 
@@ -634,7 +687,7 @@ async function init() {
     getPersonas: () => state.personas,
     // После сохранения настроек: новое имя, список персон, модель по умолчанию
     onSaved: async () => {
-      await Promise.all([checkHealth(), loadPersonas()]);
+      await Promise.all([checkHealth(), loadPersonas(), applyVoiceSettings()]);
       if (state.activeId) {
         const conv = await api.getConversation(state.activeId).catch(() => null);
         if (conv) setPersonaSelect(conv.persona_id ?? state.defaultPersonaId);
@@ -646,7 +699,10 @@ async function init() {
   const page = pageFromHash();
   if (page) showPage(page);
   else if (id) await openConversation(id);
-  else input.focus();
+  else {
+    renderGreeting(true); // «Добрый вечер, сэр.» — с эффектом печати
+    input.focus();
+  }
 
   let polling = ok ? startStatusPolling(onStatus) : null;
   // Раз в 15 секунд проверяем связь с Ollama (вдруг её запустили или закрыли)

@@ -36,7 +36,7 @@ async function send(page, text) {
   // --- Персона в верхней панели ---
   const personas = await page.$$eval('#persona-select option', (o) => o.map((x) => x.textContent));
   console.log('  персоны:', personas);
-  assert(personas[0] === '🤖 Универсальный', 'по умолчанию «Универсальный»');
+  assert(personas[0] === '🤵 Джарвис' && personas[1] === '🤖 Универсальный', 'по умолчанию «Джарвис», за ним «Универсальный»');
   await page.selectOption('#persona-select', { label: '💻 Программист' });
   await send(page, 'Почему var в цикле выводит 3 3 3?');
   let req = await lastRequest();
@@ -59,7 +59,7 @@ async function send(page, text) {
 
   // --- Новый чат → персона по умолчанию ---
   await page.click('#new-chat-btn');
-  assert((await page.$eval('#persona-select', (s) => s.selectedOptions[0].textContent)) === '🤖 Универсальный', 'новый чат — персона по умолчанию');
+  assert((await page.$eval('#persona-select', (s) => s.selectedOptions[0].textContent)) === '🤵 Джарвис', 'новый чат — персона по умолчанию');
 
   // --- Настройки: основное ---
   await page.click('#settings-btn');
@@ -112,7 +112,8 @@ async function send(page, text) {
   await page.click('#settings-btn');
   await page.click('.tab[data-tab=personas]');
   await page.waitForSelector('.persona-item.active');
-  assert(await page.inputValue('#p-name') === 'Универсальный', 'открылась первая персона');
+  assert(await page.inputValue('#p-name') === 'Джарвис', 'открылась первая персона');
+  assert((await page.inputValue('#p-prompt')).includes('{address}'), 'в инструкции Джарвиса есть обращение {address}');
   assert(await page.isHidden('#p-delete') && await page.isVisible('#p-reset'), 'встроенную нельзя удалить, можно сбросить');
   await page.screenshot({ path: OUT + '/s4-personas.png' });
 
@@ -166,7 +167,7 @@ async function send(page, text) {
   await page.waitForFunction(() => ![...document.querySelectorAll('.persona-item')].some((i) => i.textContent.includes('Переводчик')));
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => ![...document.querySelectorAll('#persona-select option')].some((o) => o.textContent.includes('Переводчик')));
-  assert((await page.$eval('#persona-select', (s) => s.selectedOptions[0].textContent)) === '🤖 Универсальный', 'после удаления диалог перешёл на персону по умолчанию');
+  assert((await page.$eval('#persona-select', (s) => s.selectedOptions[0].textContent)) === '🤵 Джарвис', 'после удаления диалог перешёл на персону по умолчанию');
 
   // --- Телефон ---
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });

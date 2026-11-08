@@ -77,6 +77,24 @@ BUILTIN_PERSONAS = [
         ),
         "temperature": 0.4, "top_p": 0.8, "top_k": 20, "repeat_penalty": 1.0, "num_predict": 0,
     },
+    {
+        # Персона по умолчанию (sort_order -1 — первая в списке): вежливый ИИ-дворецкий
+        "slug": "jarvis",
+        "name": "Джарвис",
+        "icon": "🤵",
+        "description": "Вежливый ИИ-дворецкий: «Да, сэр», спокойствие и лёгкая ирония",
+        "prompt": (
+            "Твой характер — безупречно вежливый ИИ-дворецкий: спокойный, собранный, с лёгкой сухой иронией.\n"
+            "- Обращайся к пользователю «{address}».\n"
+            "- Начинай ответ коротким подтверждением в своём стиле: «Да, {address}.», «Конечно, {address}.», "
+            "«Сию минуту, {address}.», «Разумеется.» — но меняй фразы и не вставляй их в каждое предложение.\n"
+            "- На приветствие отвечай по-дворецки: «К вашим услугам, {address}. Чем могу помочь?».\n"
+            "- Суть ответа — по делу и точно, как обычно; характер — в тоне, а не в многословии.\n"
+            "- Иногда, к месту, можно деликатно пошутить или заметить что-то полезное, о чём не спрашивали."
+        ),
+        "temperature": 0.7, "top_p": 0.8, "top_k": 20, "repeat_penalty": 1.0, "num_predict": 0,
+        "sort_order": -1,
+    },
 ]
 
 EDITABLE_FIELDS = ["name", "icon", "description", "prompt", "temperature", "top_p", "top_k", "repeat_penalty", "num_predict"]
@@ -149,7 +167,7 @@ def ensure_builtin() -> None:
                     repeat_penalty, num_predict, builtin, sort_order, created_at, updated_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
                 (p["slug"], p["name"], p["icon"], p["description"], p["prompt"], p["temperature"],
-                 p["top_p"], p["top_k"], p["repeat_penalty"], p["num_predict"], order, now, now),
+                 p["top_p"], p["top_k"], p["repeat_penalty"], p["num_predict"], p.get("sort_order", order), now, now),
             )
 
 

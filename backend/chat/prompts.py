@@ -9,6 +9,7 @@
   {name}  — имя ассистента (Джарвис)
   {model} — модель, которая сейчас отвечает (qwen3:8b)
   {date}  — сегодняшняя дата словами (модель сама не знает, какой сегодня день)
+  {address} — как обращаться к пользователю («сэр» — настраивается)
 """
 
 import re
@@ -18,7 +19,7 @@ MONTHS = ["января", "февраля", "марта", "апреля", "ма�
           "августа", "сентября", "октября", "ноября", "декабря"]
 WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
 
-PLACEHOLDERS = ("name", "model", "date")
+PLACEHOLDERS = ("name", "model", "date", "address")
 
 
 def today_text(now: datetime | None = None) -> str:
@@ -41,7 +42,8 @@ def render(template: str, values: dict) -> str:
 def build_system_prompt(settings: dict, persona: dict | None, model: str, memory_block: str = "",
                         tools_block: str = "") -> str:
     """Общий промпт + инструкция персоны + правила инструментов + факты из долговременной памяти."""
-    values = {"name": settings["assistant_name"], "model": model, "date": today_text()}
+    values = {"name": settings["assistant_name"], "model": model, "date": today_text(),
+              "address": settings.get("address", "сэр")}
     parts = [render(settings["system_prompt"], values).strip()]
     if persona and persona.get("prompt", "").strip():
         parts.append(render(persona["prompt"], values).strip())

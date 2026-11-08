@@ -8,6 +8,12 @@
   <!-- Все библиотеки лежат локально в vendor/ — интерфейс работает без интернета -->
   <link rel="stylesheet" href="vendor/highlight-github-dark.min.css">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/hud.css">
+  <!-- Тема применяется ДО отрисовки, чтобы не было «вспышки» другой темы при загрузке -->
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem("ui_theme") || "hud"; }
+    catch (e) { document.documentElement.dataset.theme = "hud"; }
+  </script>
 </head>
 <body>
   <div class="layout">
@@ -16,7 +22,11 @@
       <div class="sidebar-top">
         <div class="brand">
           <span class="brand-logo" aria-hidden="true"></span>
-          <span id="assistant-name">Джарвис</span>
+          <span class="brand-core" data-core-slot="mini"></span>
+          <span class="brand-text">
+            <span id="assistant-name">Джарвис</span>
+            <span class="brand-sub">PERSONAL AI SYSTEM</span>
+          </span>
         </div>
         <button class="btn btn-new" id="new-chat-btn" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -77,6 +87,13 @@
         <div class="vram" id="vram-indicator" title="Сколько модели загружено в видеопамять">
           <span class="dot"></span><span class="vram-text">—</span>
         </div>
+
+        <button class="icon-btn tts-toggle" id="tts-toggle" type="button" hidden aria-pressed="true"
+                title="Озвучивать ответы (голос Windows, офлайн)">
+          <svg class="icon-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+          <svg class="icon-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="m22 9-6 6M16 9l6 6"/></svg>
+        </button>
+        <div class="hud-clock" id="hud-clock" aria-hidden="true"></div>
       </header>
 
       <div class="banner" id="banner" hidden></div>
@@ -147,7 +164,9 @@
 
       <section class="messages" id="messages" aria-live="polite">
         <div class="empty" id="empty-state">
+          <div class="empty-core" data-core-slot="big"></div>
           <h1 id="greeting">Джарвис на связи. Чем помочь?</h1>
+          <p class="greeting-sub" id="greeting-sub"></p>
           <p>Всё работает на вашем компьютере — данные никуда не уходят.</p>
           <div class="suggestions">
             <button type="button" class="suggestion">Объясни, как работает async/await в JavaScript</button>
@@ -402,6 +421,21 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         <input id="set-name" maxlength="40" required>
       </div>
 
+      <div class="field-grid">
+        <div class="field">
+          <label for="set-address">Как обращаться к вам</label>
+          <input id="set-address" maxlength="30" placeholder="сэр">
+          <p class="hint">«Да, сэр» — в персоне «Джарвис» и в приветствии. Можно «мисс», «босс», имя.</p>
+        </div>
+        <div class="field">
+          <label for="set-theme">Оформление</label>
+          <select id="set-theme">
+            <option value="hud">Голографический интерфейс</option>
+            <option value="classic">Классическая тёмная тема</option>
+          </select>
+        </div>
+      </div>
+
       <div class="field">
         <div class="field-row">
           <label for="set-prompt">Системный промпт</label>
@@ -409,7 +443,7 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         </div>
         <textarea id="set-prompt" rows="11" spellcheck="false"></textarea>
         <p class="hint">Скрытая инструкция, которую модель получает перед каждым диалогом.
-          Подстановки: <code>{name}</code> — имя, <code>{model}</code> — модель, <code>{date}</code> — сегодняшняя дата.
+          Подстановки: <code>{name}</code> — имя, <code>{model}</code> — модель, <code>{date}</code> — сегодняшняя дата, <code>{address}</code> — обращение к вам.
           Инструкция выбранной персоны добавляется после этого текста.</p>
       </div>
 
@@ -554,6 +588,32 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         </div>
       </div>
       <p class="hint" id="v-status"></p>
+
+      <h3 class="set-section">🔊 Озвучивание ответов</h3>
+      <label class="toggle">
+        <input type="checkbox" id="t-tts">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Читать ответы вслух</span>
+      </label>
+      <p class="hint">Голосом Windows, без интернета. Код не зачитывается. Быстро включить/выключить — кнопка 🔊 в шапке.</p>
+      <div class="field-grid">
+        <div class="field">
+          <label for="tts-voice">Голос</label>
+          <select id="tts-voice"></select>
+        </div>
+        <div class="field">
+          <div class="field-row">
+            <label for="tts-rate">Скорость речи</label>
+            <output id="tts-rate-value"></output>
+          </div>
+          <input type="range" id="tts-rate" min="0.6" max="1.6" step="0.05">
+        </div>
+      </div>
+      <div class="kb-row">
+        <button type="button" class="btn" id="tts-test">Проверить голос</button>
+        <span class="hint" id="tts-note"></span>
+      </div>
+      <label class="check sounds-check"><input type="checkbox" id="ui-sounds"> Тихие звуки интерфейса (отправка, ответ, микрофон)</label>
 
       <h3 class="set-section">💾 Экспорт</h3>
       <p class="hint">Все диалоги одним архивом: папка Markdown-файлов (удобно читать и класть в Obsidian)

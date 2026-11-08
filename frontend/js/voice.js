@@ -8,6 +8,9 @@
 // =====================================================================
 
 import { api } from "./api.js";
+import { setCoreState } from "./hud.js";
+import { play } from "./sounds.js";
+import { stopSpeaking } from "./speech.js";
 
 const $ = (id) => document.getElementById(id);
 const MAX_SECONDS = 120; // больше двух минут за раз не записываем
@@ -72,7 +75,10 @@ async function startRecording() {
     stream.getTracks().forEach((t) => t.stop()); // выключаем микрофон (гаснет значок записи)
     finishRecording();
   });
+  stopSpeaking(); // чтобы микрофон не записал голос самого ассистента
   recorder.start();
+  setCoreState("listening");
+  play("listen");
   startedAt = Date.now();
   $("mic-btn").classList.add("recording");
   $("mic-btn").title = "Остановить запись (Esc — отменить)";
@@ -89,6 +95,7 @@ function tick() {
 
 function stopRecording() {
   clearInterval(timer);
+  setCoreState("idle");
   $("mic-timer").hidden = true;
   $("mic-btn").classList.remove("recording");
   $("mic-btn").title = "Голосовой ввод (распознаётся на этом компьютере)";

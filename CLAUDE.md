@@ -148,4 +148,12 @@
       ensurepip, «уже запущен», запуск Ollama, предложение скачать модели (отказ от bge-m3 запоминается),
       порт занят. start.bat/start.sh — только venv. Итоговый README
 
+- [x] Интерфейс «Джарвис» (после этапа 8): тема HUD по умолчанию (frontend/css/hud.css, `<html data-theme>`,
+      классическая сохранена), анимированное SVG-ядро с состояниями idle/thinking/speaking/listening
+      (body[data-core]), заставка запуска (раз за сессию, ?boot — принудительно, не при navigator.webdriver),
+      приветствие по времени суток «…, {address}.», часы; персона «Джарвис» (по умолчанию, sort_order −1,
+      «Да, {address}.»), настройки address/ui_theme/tts_enabled/tts_voice/tts_rate/ui_sounds;
+      озвучка speechSynthesis ТОЛЬКО localService-голосами (офлайн, мужской Pavel по возможности), код
+      не зачитывается; звуки — Web Audio. Шрифты Exo 2/Jura/Orbitron (OFL) локально. Без логотипов Marvel
+
 Все 8 этапов готовы.

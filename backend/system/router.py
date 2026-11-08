@@ -20,6 +20,9 @@ async def health():
     return {
         "backend": backend.name,
         "assistant_name": settings_store.get("assistant_name"),
+        # Для интерфейса сразу при загрузке: тема и обращение («Добрый вечер, сэр»)
+        "ui_theme": settings_store.get("ui_theme"),
+        "address": settings_store.get("address"),
         **(await backend.health()),
     }
 
