@@ -134,4 +134,11 @@
       переживает удаление диалога). В SFT: 👍 или исправленные, не 👎-без-исправления, без
       инструментов по умолчанию; RAG-фрагменты в вопросе или вырезка [n]. DPO: chosen=corrected,
       rejected=answer. Исправление подменяет ответ в контексте. Файлы data/dataset/train_{sft,dpo}.jsonl
-- [ ] Этап 7: дообучение (Colab + Unsloth QLoRA fp16 → GGUF → Ollama)
+- [x] Этап 7: дообучение. training/colab_finetune.ipynb (unsloth/Qwen3-8B-unsloth-bnb-4bit, LoRA r16,
+      fp16 на T4, train_on_responses_only, enable_thinking=False, сравнение до/после, GGUF q4_k_m →
+      Google Диск, опционально адаптер через convert_lora_to_gguf). training/train_local.py —
+      Qwen3-4B, seq 1024, batch 1, проверка VRAM (8B на 8 ГБ — честный отказ). backend/training:
+      анализ датасета + zip-пакет (dataset без дублей, notebook, config.json с эпохами по размеру),
+      подключение к Ollama: sha256 → /api/blobs → /api/create с template/parameters от qwen3:8b
+      (иначе пропадут tools/thinking), adapter-режим (from + adapters), quantize q4_K_M для f16
+- [ ] Этап 8: полировка (Whisper, экспорт диалогов, запуск одной командой, README)

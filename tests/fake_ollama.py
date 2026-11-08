@@ -104,7 +104,8 @@ async def show(request: Request):
     if name not in MODELS:
         return JSONResponse({"error": f"model '{name}' not found"}, status_code=404)
     m = MODELS[name]
-    return {"capabilities": m["capabilities"], "details": {"family": m["family"]}, "model_info": m.get("arch", {})}
+    return {"capabilities": m["capabilities"], "details": {"family": m["family"]}, "model_info": m.get("arch", {}),
+            "template": m.get("template", QWEN3_TEMPLATE), "parameters": m.get("parameters", QWEN3_PARAMETERS)}
 
 
 @app.get("/api/ps")
@@ -349,3 +350,60 @@ async def fake_searxng(q: str, format: str = "json"):
         {"title": f"Результат про {q}", "url": "https://example.org/a", "content": f"Подробная статья: {q}."},
         {"title": "Документация", "url": "https://docs.example.org/b", "content": "Официальная документация."},
     ]}
+
+
+# ---------- создание моделей (как `ollama create`) ----------
+
+QWEN3_TEMPLATE = "{{- if .System }}<|im_start|>system\n{{ .System }}<|im_end|>\n{{ end }}{{- if .Tools }}...{{ end }}{{ if .Thinking }}<think>{{ end }}"
+QWEN3_PARAMETERS = 'repeat_penalty                 1\nstop                           "<|im_start|>"\nstop                           "<|im_end|>"\ntemperature                    0.6\ntop_k                          20\ntop_p                          0.95'
+
+
+@app.head("/api/blobs/{digest}")
+async def blob_exists(digest: str):
+    return JSONResponse({}, status_code=200 if digest in state.setdefault("blobs", {}) else 404)
+
+
+@app.post("/api/blobs/{digest}")
+async def blob_upload(digest: str, request: Request):
+    data = b""
+    async for chunk in request.stream():
+        data += chunk
+    if "sha256:" + hashlib.sha256(data).hexdigest() != digest:
+        return JSONResponse({"error": "digest mismatch"}, status_code=400)
+    state.setdefault("blobs", {})[digest] = len(data)
+    return JSONResponse({}, status_code=201)
+
+
+@app.post("/api/create")
+async def create(request: Request):
+    body = await request.json()
+    state["last_create"] = body
+    blobs = state.setdefault("blobs", {})
+    files = {**(body.get("files") or {}), **(body.get("adapters") or {})}
+    missing = [d for d in files.values() if d not in blobs]
+    if missing:
+        return JSONResponse({"error": f"blob {missing[0]} not found"}, status_code=400)
+    if body.get("adapters") and state.get("adapters_unsupported"):
+        async def fail():
+            yield json.dumps({"status": "parsing modelfile"}) + "\n"
+            yield json.dumps({"error": "adapters are not supported for this model architecture"}) + "\n"
+        return StreamingResponse(fail(), media_type="application/x-ndjson")
+    base = MODELS.get(body.get("from") or "qwen3:8b", MODELS["qwen3:8b"])
+    name = body["model"] if ":" in body["model"] else body["model"] + ":latest"
+    MODELS[name] = {**base, "size": sum(blobs[d] for d in files.values()) or base["size"],
+                    "template": body.get("template", base.get("template", QWEN3_TEMPLATE))}
+
+    async def progress():
+        for status in ["parsing GGUF", "using existing layer", "writing manifest", "success"]:
+            yield json.dumps({"status": status}) + "\n"
+            await asyncio.sleep(0.01)
+    return StreamingResponse(progress(), media_type="application/x-ndjson")
+
+
+ORIGINAL_MODELS = set(MODELS)
+
+
+def remove_created_models() -> None:
+    """Для тестов: убрать модели, созданные через /api/create."""
+    for name in set(MODELS) - ORIGINAL_MODELS:
+        MODELS.pop(name)

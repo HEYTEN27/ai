@@ -51,6 +51,11 @@ class OllamaBackend(LLMBackend):
         # Значение — (возможности модели, байт KV-кэша на токен)
         self._show_cache: dict[str, tuple[list[str], int | None]] = {}
 
+    @property
+    def client(self) -> httpx.AsyncClient:
+        """HTTP-клиент Ollama — для служебных операций вроде подключения обученной модели."""
+        return self._client
+
     # ---------- служебное ----------
 
     def _connection_error(self) -> LLMError:

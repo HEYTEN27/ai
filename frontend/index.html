@@ -34,6 +34,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
           Датасет
         </button>
+        <button class="btn btn-nav" id="training-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/></svg>
+          Обучение
+        </button>
       </div>
       <nav class="conv-list" id="conv-list" aria-label="Диалоги"></nav>
       <div class="sidebar-footer">
@@ -249,6 +253,88 @@
             <button type="button" class="ds-filter" data-filter="excluded">Не в обучении</button>
           </div>
           <div id="ds-list"></div>
+        </div>
+      </section>
+
+      <!-- ===== Страница «Обучение» ===== -->
+      <section class="page-view training-view" id="training-view" hidden aria-labelledby="training-title">
+        <div class="memory-inner">
+          <header class="memory-head">
+            <h1 id="training-title">Дообучение</h1>
+            <p class="memory-sub">Модель учится на ваших оценках и исправлениях (страница «Датасет») и начинает
+              отвечать в нужном вам стиле. Обучение — в Google Colab, готовая модель подключается к Ollama здесь.</p>
+          </header>
+
+          <section class="tr-step">
+            <h2><span class="tr-num">1</span> Датасет</h2>
+            <ul class="tr-checks" id="tr-checks"></ul>
+            <p class="hint" id="tr-config"></p>
+          </section>
+
+          <section class="tr-step">
+            <h2><span class="tr-num">2</span> Обучение в Google Colab</h2>
+            <p class="hint">Бесплатная видеокарта Colab (Tesla T4, 16 ГБ) обучает Qwen3 8B за 10–20 минут.
+              На вашей RTX 2060 Super (8 ГБ) 8B-модель не помещается даже в 4 битах — см. «Обучить у себя» ниже.</p>
+            <ol class="tr-list">
+              <li>Скачайте пакет: в нём датасет, ноутбук и настройки.</li>
+              <li>В Colab: <i>Файл → Загрузить блокнот</i> → <code>colab_finetune.ipynb</code> из архива.</li>
+              <li><i>Среда выполнения → Сменить среду → T4 GPU</i>, затем запускайте ячейки по порядку.</li>
+              <li>Когда ноутбук попросит файл — загрузите весь архив. Результат появится на Google Диске в папке <code>jarvis/</code>.</li>
+            </ol>
+            <div class="kb-row tr-buttons">
+              <a class="btn btn-primary" id="tr-package" href="/api/training/package" download>Скачать пакет для Colab</a>
+              <a class="btn" href="https://colab.research.google.com/" target="_blank" rel="noopener noreferrer">Открыть Google Colab ↗</a>
+            </div>
+            <p class="hint tr-privacy">Датасет загружается в Google Colab — то есть покидает компьютер. Перед этим
+              просмотрите его на странице «Датасет».</p>
+            <details class="hint-details">
+              <summary>Обучить у себя (экспериментально)</summary>
+              <p>Скрипт <code>training/train_local.py</code> обучает <b>Qwen3-4B</b> (8B на 8 ГБ не помещается) в float16
+                с контекстом 1024. Перед запуском закройте Ollama, браузер и Wallpaper Engine. Нужен отдельный
+                Python с PyTorch для CUDA и Unsloth (на Windows может понадобиться WSL2). Подробности — в начале файла.</p>
+              <pre class="t-out">ollama stop qwen3:8b
+python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
+            </details>
+          </section>
+
+          <section class="tr-step">
+            <h2><span class="tr-num">3</span> Подключить обученную модель</h2>
+            <form id="tr-import-form" class="tr-form" novalidate>
+              <div class="field">
+                <label for="tr-path">Файл .gguf (скачанный с Google Диска)</label>
+                <input id="tr-path" placeholder="C:\Users\имя\Downloads\jarvis\jarvis-qwen3.Q4_K_M.gguf" spellcheck="false">
+              </div>
+              <div class="field-grid">
+                <div class="field">
+                  <label for="tr-name">Имя модели в Ollama</label>
+                  <input id="tr-name" value="jarvis-qwen3" spellcheck="false">
+                </div>
+                <div class="field">
+                  <span class="field-label">Что за файл</span>
+                  <label class="check"><input type="radio" name="tr-kind" value="gguf" checked> Полная модель (~5 ГБ) — надёжно</label>
+                  <label class="check"><input type="radio" name="tr-kind" value="adapter"> Адаптер LoRA (~100 МБ) поверх qwen3:8b</label>
+                </div>
+              </div>
+              <label class="check"><input type="checkbox" id="tr-quantize"> Файл несжатый (f16, после локального обучения) — сжать до Q4_K_M</label>
+              <div class="kb-row">
+                <button type="submit" class="btn btn-primary" id="tr-import-btn">Подключить к Ollama</button>
+                <span class="hint" id="tr-base-note"></span>
+              </div>
+            </form>
+            <div class="tr-progress" id="tr-progress" hidden>
+              <div class="tr-stage" id="tr-stage"></div>
+              <div class="ds-bar"><span id="tr-bar"></span></div>
+              <div class="tr-log" id="tr-log"></div>
+            </div>
+            <p class="hint" id="tr-models"></p>
+          </section>
+
+          <section class="tr-step">
+            <h2><span class="tr-num">4</span> Сравнить</h2>
+            <p class="hint">Выберите дообученную модель в списке вверху и задайте вопросы из своей обычной работы.
+              Кнопка «Повторить» под ответом переответит выбранной моделью — удобно сравнивать с <code>qwen3:8b</code>.
+              Если стало хуже — уменьшите число эпох или соберите больше разнообразных примеров.</p>
+          </section>
         </div>
       </section>
 

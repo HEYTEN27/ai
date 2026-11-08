@@ -39,6 +39,7 @@ def client(fresh_db):
     from backend.main import app
 
     fake_ollama.reset_state()
+    fake_ollama.remove_created_models()  # модели, «подключённые» в прошлых тестах
     set_backend(OllamaBackend("http://fake-ollama", transport=httpx.ASGITransport(app=fake_ollama.app)))
     with TestClient(app) as c:
         yield c

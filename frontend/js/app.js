@@ -18,6 +18,7 @@ import {
   setPersonaLookup,
 } from "./chat.js";
 import { initDatasetPage, refreshDatasetPage } from "./dataset.js";
+import { initTrainingPage, refreshTrainingPage } from "./training.js";
 import { initKnowledgePage, refreshKnowledgePage } from "./knowledge.js";
 import { initMemoryPage, refreshMemoryPage } from "./memory.js";
 import { initSettings } from "./settings.js";
@@ -246,6 +247,7 @@ const PAGES = {
   memory: { hash: "#/memory", view: "memory-view", button: "memory-btn", refresh: () => refreshMemoryPage() },
   knowledge: { hash: "#/knowledge", view: "knowledge-view", button: "knowledge-btn", refresh: () => refreshKnowledgePage() },
   dataset: { hash: "#/dataset", view: "dataset-view", button: "dataset-btn", refresh: () => refreshDatasetPage() },
+  training: { hash: "#/training", view: "training-view", button: "training-btn", refresh: () => refreshTrainingPage() },
 };
 
 function showPage(name) {
@@ -282,6 +284,9 @@ $("memory-btn").addEventListener("click", () => showPage("memory"));
 $("knowledge-btn").addEventListener("click", () => showPage("knowledge"));
 $("dataset-btn").addEventListener("click", () => showPage("dataset"));
 initDatasetPage();
+$("training-btn").addEventListener("click", () => showPage("training"));
+// Новая модель подключена — обновляем список моделей вверху
+initTrainingPage({ onModelAdded: () => loadModels() });
 
 function pageFromHash() {
   return Object.keys(PAGES).find((name) => PAGES[name].hash === location.hash) || null;

@@ -139,6 +139,8 @@ export const api = {
   confirmTool: (id, approved) => request("POST", `/api/tools/confirm/${id}`, { approved }),
   checkFolder: (path) => request("GET", `/api/tools/files/check?path=${encodeURIComponent(path)}`),
 
+  trainingStatus: () => request("GET", "/api/training/status"),
+
   rateMessage: (messageId, rating) => request("POST", "/api/dataset/feedback", { message_id: messageId, rating }),
   correctMessage: (messageId, corrected) => request("POST", "/api/dataset/correct", { message_id: messageId, corrected }),
   dataset: (filter = "all") => request("GET", `/api/dataset?filter=${filter}`),
