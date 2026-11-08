@@ -4,9 +4,15 @@
   GET /api/health  — запущена ли Ollama, её версия
   GET /api/models  — модели для чата и модели эмбеддингов
   GET /api/status  — какие модели загружены и помещаются ли они в VRAM
+  GET  /api/models/vision  — модели зрения: какие рекомендуем и какие скачаны (этап 14)
+  POST /api/models/pull    — скачать модель через Ollama: {name}
+  GET  /api/models/pull    — прогресс скачивания
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from ..llm import LLMError, get_backend
 from ..settings import store as settings_store
@@ -84,3 +90,68 @@ async def status():
         "loaded": [{**m.to_dict(), "is_embedding": m.name in embedding_names} for m in loaded],
         "warning": warning,
     }
+
+
+# ---------- модели зрения и скачивание моделей (этап 14) ----------
+
+# Что поместится в 8 ГБ вместе с контекстом. Модели зрения крупнее 8B — частично на CPU и медленно.
+VISION_MODELS = [
+    {"name": "qwen3-vl:8b", "title": "Qwen3-VL 8B — лучше всех читает текст, скриншоты и формулы",
+     "size_gb": 6.1, "recommended": True},
+    {"name": "qwen2.5vl:7b", "title": "Qwen2.5-VL 7B — проверенная, чуть проще", "size_gb": 6.0},
+    {"name": "gemma3:4b", "title": "Gemma 3 4B — лёгкая и быстрая, видит хуже", "size_gb": 3.3},
+    {"name": "minicpm-v:8b", "title": "MiniCPM-V 8B — хороша для фото", "size_gb": 5.5},
+]
+
+
+class PullBody(BaseModel):
+    name: str = Field(min_length=1, max_length=100, pattern=r"^[\w.\-:/]+$")
+
+
+_pull: dict = {"state": None, "task": None}
+
+
+async def _run_pull(name: str) -> None:
+    state = _pull["state"]
+    try:
+        async for p in get_backend().pull(name):
+            state["status"] = p.get("status", state["status"])
+            # Ollama качает модель несколькими слоями; показываем самый большой — это веса
+            if p.get("total") and p["total"] >= state.get("total", 0):
+                state["total"], state["completed"] = p["total"], p.get("completed", 0)
+        state["status"] = "success"
+    except LLMError as e:
+        state["error"] = str(e)
+    finally:
+        state["finished"] = True
+
+
+@router.get("/models/vision")
+async def vision_models():
+    try:
+        installed = {m.name: m for m in await get_backend().list_models()}
+    except LLMError:
+        installed = {}
+    extra = [{"name": n, "title": n, "size_gb": round((m.size_bytes or 0) / 1024 ** 3, 1)}
+             for n, m in installed.items() if m.supports_vision and n not in {v["name"] for v in VISION_MODELS}]
+    return {
+        "selected": settings_store.get("vision_model"),
+        "models": [{**v, "installed": v["name"] in installed and installed[v["name"]].supports_vision}
+                   for v in VISION_MODELS] + [{**v, "installed": True} for v in extra],
+        "pull": _pull["state"],
+    }
+
+
+@router.post("/models/pull", status_code=202)
+async def pull_model(body: PullBody):
+    task = _pull["task"]
+    if task and not task.done():
+        raise HTTPException(status_code=409, detail=f"Уже скачивается {_pull['state']['name']}")
+    _pull["state"] = {"name": body.name, "status": "начинаю", "completed": 0, "total": 0, "error": None, "finished": False}
+    _pull["task"] = asyncio.create_task(_run_pull(body.name))
+    return _pull["state"]
+
+
+@router.get("/models/pull")
+def pull_status():
+    return _pull["state"] or {}

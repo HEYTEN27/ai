@@ -50,12 +50,12 @@ const last = '.msg-assistant:last-child';
   // --- Прикрепить файлы: текст и картинку (картинку пока нельзя) ---
   await page.setInputFiles('#attach-input', [
     { name: 'лекция.txt', mimeType: 'text/plain', buffer: Buffer.from('Фотосинтез происходит в хлоропластах.\n\nВторой абзац лекции.') },
-    { name: 'фото.png', mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]) },
+    { name: 'фото.heic', mimeType: 'image/heic', buffer: Buffer.from([0x00, 0x01]) },
   ]);
   await page.waitForSelector('.attach-chip.is-ready');
   await page.waitForSelector('.attach-chip.is-error');
   assert((await page.textContent('.attach-chip.is-ready .a-info')).includes('символ'), 'чип файла: размер и число символов');
-  assert((await page.textContent('.attach-chip.is-error .a-info')).includes('Картинки'), 'картинка — понятная ошибка');
+  assert((await page.textContent('.attach-chip.is-error .a-info')).includes('HEIC'), 'HEIC — понятная ошибка');
   await page.click('.attach-chip.is-error .a-remove');
   assert(await page.$$eval('.attach-chip', (c) => c.length) === 1, 'ошибочный чип можно убрать');
   assert(await page.isEnabled('#send-btn'), 'можно отправить только файл, без текста');

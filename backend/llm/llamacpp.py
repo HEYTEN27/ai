@@ -24,6 +24,15 @@ TIMEOUT = httpx.Timeout(connect=5.0, read=300.0, write=30.0, pool=5.0)
 SUPPORTED_OPTIONS = {"temperature", "top_p", "top_k", "repeat_penalty", "seed", "min_p"}
 
 
+def _openai_message(message: dict) -> dict:
+    """Картинки у Ollama — поле images (base64), а у OpenAI-совместимого сервера — части content."""
+    if not message.get("images"):
+        return message
+    parts = [{"type": "text", "text": message.get("content") or ""}]
+    parts += [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}} for b64 in message["images"]]
+    return {k: v for k, v in message.items() if k != "images"} | {"content": parts}
+
+
 class LlamaCppBackend(LLMBackend):
     name = "llamacpp"
 
@@ -63,7 +72,7 @@ class LlamaCppBackend(LLMBackend):
         format: dict | None = None,
         tools: list[dict] | None = None,
     ) -> AsyncIterator[ChatChunk]:
-        payload: dict = {"model": model, "messages": messages, "stream": True}
+        payload: dict = {"model": model, "messages": [_openai_message(m) for m in messages], "stream": True}
         if tools:
             payload["tools"] = tools  # формат описаний у Ollama и OpenAI одинаковый
         # OpenAI-сервер присылает вызов инструмента кусками: имя, потом аргументы по частям.

@@ -245,6 +245,27 @@ class OllamaBackend(LLMBackend):
             for m in r.json().get("models", [])
         ]
 
+    async def pull(self, name: str):
+        """Скачивание модели через Ollama (/api/pull): поток строк JSON с прогрессом."""
+        try:
+            async with self._client.stream("POST", "/api/pull", json={"model": name, "stream": True},
+                                           timeout=httpx.Timeout(30, read=None)) as r:
+                if r.status_code != 200:
+                    await r.aread()
+                    raise LLMError(f"Ollama (скачивание): {self._error_text(r)}")
+                async for line in r.aiter_lines():
+                    if not line.strip():
+                        continue
+                    data = json.loads(line)
+                    if data.get("error"):
+                        raise LLMError(f"Ollama: {data['error']}")
+                    yield data
+        except httpx.ConnectError as e:
+            raise self._connection_error() from e
+        except httpx.HTTPError as e:
+            raise LLMError(f"Скачивание прервалось: {e}") from e
+        self._show_cache.clear()  # у новой модели свои возможности — перечитаем
+
     async def unload_all(self) -> list[str]:
         """Выгрузить все модели из видеопамяти (перед генерацией картинок: вместе они в 8 ГБ не влезают).
 

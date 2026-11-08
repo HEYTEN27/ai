@@ -23,7 +23,7 @@ import { initVoice } from "./voice.js";
 import { hasAttachments, initAttachments, takeReady } from "./attachments.js";
 import { autoOpen, closeArtifact, initArtifacts, isArtifactOpen, setFixHandler } from "./artifacts.js";
 import { runBoot } from "./boot.js";
-import { applyTheme, currentTheme, initHud, renderGreeting, setCoreState, setIdentity, waitingText } from "./hud.js";
+import { applyTheme, currentTheme, getIdentity, initHud, renderGreeting, setCoreState, setIdentity, waitingText } from "./hud.js";
 import { play, setSoundsEnabled } from "./sounds.js";
 import { activeEngine, configureSpeech, createStreamSpeaker, isSpeaking, onVoicesReady, setNeuralReady, stopSpeaking, voiceLabel } from "./speech.js";
 
@@ -456,6 +456,7 @@ async function streamAnswer(startRequest) {
   let memoryFacts = null;
   let sources = null; // фрагменты базы знаний для ссылок [1], [2]
   let files = null; // какие файлы диалога модель прочитала (целиком или выдержками)
+  let vision = null; // ответ даёт модель зрения (в вопросе были картинки)
 
   // Ответ готов → поле ввода снова доступно. Поток при этом ещё открыт:
   // сервер может прислать событие memory («Запомнил: …») через пару секунд.
@@ -479,6 +480,9 @@ async function streamAnswer(startRequest) {
       memoryFacts = data.memory?.facts || [];
       sources = data.knowledge?.sources || [];
       files = data.files || [];
+      vision = data.vision || null;
+      // Модель зрения ещё не в видеопамяти — первый ответ дольше, объясняем почему
+      if (vision?.instead_of && !started) bubble.setWaiting(`Подключаю модель зрения ${vision.model}, ${getIdentity().address}…`);
     }
     else if (event === "thinking") bubble.appendThinking(data.text);
     else if (event === "token") {
@@ -488,7 +492,7 @@ async function streamAnswer(startRequest) {
     }
     else if (event === "done") {
       finished = true;
-      bubble.finish({ message: data.message, memoryFacts, sources, files });
+      bubble.finish({ message: data.message, memoryFacts, sources, files, vision });
       release();
       play("done");
       speaker.finish(spokenText); // дочитать хвост ответа
@@ -497,7 +501,7 @@ async function streamAnswer(startRequest) {
       maybeAutoCheck(bubble.element);
     } else if (event === "error") {
       finished = true;
-      bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources, files });
+      bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources, files, vision });
       release();
       speaker.cancel();
       setCoreState("idle");

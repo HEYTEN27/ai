@@ -28,9 +28,10 @@ TEXT_EXTENSIONS = {
     ".cpp", ".hpp", ".cs", ".go", ".rs", ".php", ".rb", ".swift", ".sql", ".sh", ".bat", ".ps1", ".vue", ".svelte",
 }
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".pptx"}
-SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS
+# Картинки (этап 14) — их «читает» модель зрения, а не парсер текста
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS | IMAGE_EXTENSIONS
 
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic"}
 OLD_OFFICE = {".doc": "docx", ".xls": "xlsx", ".ppt": "pptx"}
 
 MIME_TYPES = {
@@ -39,6 +40,12 @@ MIME_TYPES = {
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".csv": "text/csv",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
     ".json": "application/json",
     ".md": "text/markdown",
     ".html": "text/html",
@@ -67,21 +74,20 @@ def check_supported(name: str) -> None:
     ext = Path(name).suffix.lower()
     if ext in SUPPORTED_EXTENSIONS:
         return
-    if ext in IMAGE_EXTENSIONS:
-        raise ExtractError("Картинки Джарвис пока не видит — это появится на этапе «Зрение». "
-                           "Сейчас можно прикрепить PDF, Word, Excel, PowerPoint, текст или код.")
+    if ext in (".heic", ".heif"):
+        raise ExtractError("Формат HEIC (iPhone) не поддерживается — пришлите JPG или PNG. На iPhone: Настройки → "
+                           "Камера → Форматы → «Наиболее совместимый».")
     if ext in OLD_OFFICE:
         raise ExtractError(f"Старый формат {ext} не поддерживается. Откройте файл в Office и сохраните "
                            f"как .{OLD_OFFICE[ext]} («Файл → Сохранить как»).")
     raise ExtractError(f"Формат {ext or 'без расширения'} не поддерживается. Подходят: PDF, DOCX, XLSX, PPTX, "
-                       "TXT, MD, CSV и файлы с кодом.")
+                       "TXT, MD, CSV, файлы с кодом и картинки PNG, JPG, WEBP, GIF.")
 
 
 def _finish(text: str, meta: dict) -> Extracted:
     text = text.strip()
     if not text:
-        raise ExtractError("В файле не найдено текста. Если это скан, текст в нём — картинкой; "
-                           "распознавание сканов появится вместе со «Зрением».")
+        raise ExtractError("В файле не найдено текста.")
     if len(text) > MAX_TEXT_CHARS:
         text = text[:MAX_TEXT_CHARS]
         meta["truncated"] = True

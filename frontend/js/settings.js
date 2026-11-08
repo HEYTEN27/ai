@@ -54,6 +54,8 @@ export function initSettings({ getModels, getPersonas, onSaved }) {
   }
 
   $("general-form").addEventListener("submit", saveGeneral);
+  $("set-vision").addEventListener("change", renderVisionNote);
+  $("vision-pull").addEventListener("click", pullVision);
   initPersonasTab({ getModels, onChanged: onSaved });
   initToolsTab({ onClose: () => dialog.close() });
   initDataTab({ onClose: () => dialog.close() });
@@ -111,6 +113,7 @@ async function openSettings({ getModels, getPersonas }) {
   $("set-vram-total").value = v.vram_total_gb;
   $("set-vram-reserved").value = v.vram_reserved_gb;
 
+  loadVision(v.vision_model);
   updateContextLabel();
   switchTab("general");
   dialog.showModal();
@@ -197,6 +200,7 @@ async function saveGeneral(e) {
     kv_cache_type: $("set-kv").value,
     vram_total_gb: Number($("set-vram-total").value),
     vram_reserved_gb: Number($("set-vram-reserved").value),
+    vision_model: $("set-vision").value || visionFallback(),
   };
   if (!changes.assistant_name) {
     showError("Укажите имя ассистента");
@@ -210,6 +214,82 @@ async function saveGeneral(e) {
   }
   dialog.close();
   onSavedCallback();
+}
+
+// ---------- модель зрения (этап 14) ----------
+
+let vision = null; // ответ GET /api/models/vision
+let visionTimer = null;
+
+function visionFallback() {
+  return vision?.selected || "qwen3-vl:8b";
+}
+
+async function loadVision(selected) {
+  try {
+    vision = await api.visionModels();
+  } catch {
+    vision = { selected, models: [], pull: null };
+  }
+  const select = $("set-vision");
+  select.innerHTML = "";
+  for (const m of vision.models) {
+    select.append(new Option(`${m.installed ? "✓ " : ""}${m.title} · ${String(m.size_gb).replace(".", ",")} ГБ`, m.name));
+  }
+  if (selected && !vision.models.some((m) => m.name === selected)) select.append(new Option(selected, selected));
+  select.value = selected || vision.selected;
+  renderVisionNote();
+  renderPull(vision.pull);
+}
+
+function renderVisionNote() {
+  const m = vision?.models.find((x) => x.name === $("set-vision").value);
+  const pulling = vision?.pull && !vision.pull.finished;
+  $("vision-pull").hidden = !m || m.installed;
+  $("vision-pull").disabled = Boolean(pulling);
+  $("vision-note").textContent = !m ? ""
+    : m.installed ? "Скачана. Когда в вопросе картинка, а основная модель её не видит, ответ даёт эта модель — "
+      + "Ollama сама поменяет модели в видеопамяти (первый такой ответ — на 10–20 с дольше)."
+      : `Не скачана (≈ ${String(m.size_gb).replace(".", ",")} ГБ). Без неё Джарвис не видит картинки.`;
+}
+
+function renderPull(p) {
+  const box = $("vision-progress");
+  box.hidden = !p || (p.finished && !p.error);
+  if (!p) return;
+  const pct = p.total ? Math.round((p.completed / p.total) * 100) : 0;
+  $("vision-fill").style.width = `${pct}%`;
+  $("vision-progress-text").textContent = p.error ? p.error
+    : `Скачиваю ${p.name}: ${pct}% (${(p.completed / 1073741824).toFixed(1)} из ${(p.total / 1073741824).toFixed(1)} ГБ)`;
+  box.classList.toggle("is-error", Boolean(p.error));
+}
+
+async function pollPull() {
+  clearTimeout(visionTimer);
+  let p;
+  try {
+    p = await api.pullStatus();
+  } catch {
+    return;
+  }
+  renderPull(p);
+  if (!p.finished) {
+    visionTimer = setTimeout(pollPull, 700);
+  } else {
+    await loadVision($("set-vision").value);
+    onSavedCallback(); // новая модель появилась — обновить список моделей в чате
+  }
+}
+
+async function pullVision() {
+  try {
+    await api.pullModel($("set-vision").value);
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  $("vision-pull").disabled = true;
+  pollPull();
 }
 
 function showError(text) {

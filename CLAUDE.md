@@ -203,5 +203,15 @@
       count ≤4) + tool_progress в SSE (чат опрашивает tool.progress раз в 0,5 с), «Стоп» → engine.cancel.
       /api/images: status/install/download/generate(translate через LLM)/cancel/gallery. «Ещё вариант» дописывает в
       extras карточки ответа. IMAGE_ENGINE=fake — заглушка (Pillow) для тестов; настоящий diffusers проверяет пользователь
+- [x] Этап 14: зрение. ModelInfo.supports_vision (capability "vision" из /api/show). Картинки-вложения
+      (png/jpg/webp/gif/bmp; HEIC — отказ с подсказкой): оригинал + files/<id>/vision.jpg (EXIF-поворот, прозрачность →
+      белый, ≤1280 px, JPEG 85; лимит 60 Мп), /api/files/{id}/preview. Сканы PDF (парсер говорит «нет текста/скан») →
+      pypdf page.images, первые 4 страницы → page-N.jpg, meta type=scan. В чате: картинки самого свежего сообщения
+      среди 3 последних пользовательских (≤4), base64 в messages[-1].images (Ollama; llama.cpp → content parts
+      image_url), подпись «[приложены изображения…]» в вопросе, бюджет истории уменьшается на токены картинок.
+      Если модель не видит — подмена на settings.vision_model (qwen3-vl:8b), нет её — LLMError с подсказкой.
+      extras/start.vision {model, images, instead_of}. /api/models/vision (каталог: qwen3-vl:8b, qwen2.5vl:7b,
+      gemma3:4b, minicpm-v:8b) и /api/models/pull (Ollama /api/pull с прогрессом, LLMBackend.pull). UI: миниатюры в
+      чипах и сообщениях, Ctrl+V скриншота, «👁 N картинка», «Подключаю модель зрения…», раздел в настройках
 
-Этапы 1–13 готовы. Дальше по плану: 14 зрение, 15 проекты, удобство и 3D-модели.
+Этапы 1–14 готовы. Дальше по плану: 15 проекты, удобство и 3D-модели.

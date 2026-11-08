@@ -30,7 +30,7 @@ class ModelInfo:
     parameters_b: float | None = None  # то же числом: 8.2
     quantization: str | None = None  # например "Q4_K_M"
     size_bytes: int | None = None  # размер файла модели на диске
-    capabilities: list[str] = field(default_factory=list)  # completion, tools, thinking, embedding
+    capabilities: list[str] = field(default_factory=list)  # completion, tools, thinking, embedding, vision
     # Сколько байт видеопамяти занимает ОДИН токен контекста (KV-кэш в fp16).
     # Нужно для оценки VRAM в настройках. None — движок не сообщил устройство модели.
     kv_bytes_per_token: int | None = None
@@ -49,6 +49,11 @@ class ModelInfo:
         return "tools" in self.capabilities
 
     @property
+    def supports_vision(self) -> bool:
+        """Модель видит картинки (qwen3-vl, gemma3, llava…)."""
+        return "vision" in self.capabilities
+
+    @property
     def is_large(self) -> bool:
         return self.parameters_b is not None and self.parameters_b > LARGE_MODEL_THRESHOLD_B
 
@@ -58,6 +63,7 @@ class ModelInfo:
             is_embedding=self.is_embedding,
             supports_thinking=self.supports_thinking,
             supports_tools=self.supports_tools,
+            supports_vision=self.supports_vision,
             is_large=self.is_large,
         )
         return data
@@ -222,6 +228,11 @@ class LLMBackend(ABC):
     async def loaded_models(self) -> list[LoadedModel] | None:
         """Какие модели сейчас в памяти. None = движок не умеет об этом сообщать."""
         return None
+
+    async def pull(self, name: str):
+        """Скачать модель: асинхронный генератор словарей прогресса {status, completed, total}."""
+        raise LLMError("Этот движок не умеет скачивать модели — скачайте файл модели вручную.")
+        yield {}  # pragma: no cover — делает функцию генератором
 
     async def unload_all(self) -> list[str]:
         """Освободить видеопамять от языковых моделей. По умолчанию движок этого не умеет."""

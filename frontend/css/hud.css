@@ -363,6 +363,12 @@ body[data-core="speaking"] .tts-toggle { color: var(--accent); box-shadow: var(-
 [data-theme="hud"] .img-lightbox { border-radius: 3px; border-color: rgba(63, 217, 255, .4); background: linear-gradient(180deg, rgba(4, 16, 28, .98), rgba(2, 8, 16, .98)); box-shadow: var(--glow); }
 [data-theme="hud"] .img-lightbox img { border-radius: 2px; }
 
+/* ---------- зрение (этап 14) ---------- */
+
+[data-theme="hud"] .file-thumb { border-radius: 3px; border-color: rgba(63, 217, 255, .3); }
+[data-theme="hud"] .file-thumb:hover { box-shadow: var(--glow); }
+[data-theme="hud"] .attach-chip .a-icon.has-thumb { border-radius: 2px; }
+
 /* ---------- узкие экраны и «меньше анимаций» ---------- */
 
 @media (max-width: 768px) {

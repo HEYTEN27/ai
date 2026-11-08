@@ -10,7 +10,8 @@ const $ = (id) => document.getElementById(id);
 const MAX_FILES = 10;
 const MAX_BYTES = 25 * 1024 * 1024;
 export const ACCEPT = ".pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.tsv,.json,.xml,.yaml,.yml,.log,.html,.css,.js,.ts,.tsx,.jsx," +
-  ".py,.java,.kt,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.swift,.sql,.sh,.bat,.ps1,.vue,.ini,.toml";
+  ".py,.java,.kt,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.swift,.sql,.sh,.bat,.ps1,.vue,.ini,.toml," +
+  ".png,.jpg,.jpeg,.webp,.gif,.bmp"; // картинки (этап 14) — их смотрит модель зрения
 
 /** @type {{key:number, file:File, status:'uploading'|'ready'|'error', record?:object, error?:string, promise:Promise}[]} */
 let items = [];
@@ -20,7 +21,17 @@ let onChange = () => {};
 /** Иконка по расширению файла. */
 export function fileIcon(name) {
   const ext = String(name).split(".").pop().toLowerCase();
-  return { pdf: "📕", docx: "📝", doc: "📝", pptx: "📊", xlsx: "📗", csv: "📗", tsv: "📗" }[ext] || "📄";
+  return { pdf: "📕", docx: "📝", doc: "📝", pptx: "📊", xlsx: "📗", csv: "📗", tsv: "📗", png: "🖼️", jpg: "🖼️",
+    jpeg: "🖼️", webp: "🖼️", gif: "🖼️", bmp: "🖼️" }[ext] || "📄";
+}
+
+/** Картинка или скан PDF — у таких вложений есть миниатюра. */
+export function hasPreview(record) {
+  return ["image", "scan"].includes(record?.meta?.type);
+}
+
+export function previewUrl(record) {
+  return `/api/files/${record.id}/preview`;
 }
 
 export function formatSize(bytes) {
@@ -39,7 +50,9 @@ function plural(n, one, few, many) {
 export function describeFile(record) {
   const m = record.meta || {};
   const parts = [formatSize(record.size)];
-  if (m.pages) parts.push(`${m.pages} стр.`);
+  if (m.type === "image") parts.push(`${m.width}×${m.height}`);
+  else if (m.type === "scan") parts.push(`скан · ${m.pages} стр.`);
+  else if (m.pages) parts.push(`${m.pages} стр.`);
   else if (m.slides) parts.push(plural(m.slides, "слайд", "слайда", "слайдов"));
   else if (m.sheets?.length) parts.push(plural(m.sheets.length, "лист", "листа", "листов"));
   else if (m.chars) parts.push(plural(m.chars, "символ", "символа", "символов"));
@@ -58,6 +71,15 @@ function render() {
     const icon = document.createElement("span");
     icon.className = "a-icon";
     icon.textContent = item.status === "uploading" ? "" : item.status === "error" ? "⚠️" : fileIcon(item.file.name);
+    if (item.status === "ready" && hasPreview(item.record)) {
+      // Миниатюра вместо значка: сразу видно, тот ли скриншот прикрепили
+      icon.textContent = "";
+      icon.classList.add("has-thumb");
+      const img = document.createElement("img");
+      img.src = previewUrl(item.record);
+      img.alt = "";
+      icon.append(img);
+    }
     const text = document.createElement("span");
     text.className = "a-text";
     const name = document.createElement("span");

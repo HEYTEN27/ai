@@ -83,7 +83,8 @@ def defaults() -> dict:
         "artifacts_enabled": True,  # игры, страницы, схемы в панели рядом с чатом (этап 10)
         "tool_documents": True,
         "tool_images": True,  # рисование картинок (работает, когда движок установлен и модель скачана)
-        "image_model": "dreamshaper",  # модель для рисования (backend/images/catalog.py)  # создание Word, PowerPoint, Excel (файлы остаются внутри приложения)
+        "image_model": "dreamshaper",
+        "vision_model": "qwen3-vl:8b",  # модель зрения: подключается, когда в вопросе есть картинка  # модель для рисования (backend/images/catalog.py)  # создание Word, PowerPoint, Excel (файлы остаются внутри приложения)
         "files_root": "",  # папка, из которой модели можно читать файлы (с подтверждением)
         "python_timeout": 10,  # секунд на выполнение кода
         "confirm_python": True,  # спрашивать перед запуском кода
@@ -195,6 +196,10 @@ def _validate(key: str, value):
             raise SettingsError("Обращение: от 1 до 30 символов (например, «сэр», «мисс», «босс»)")
     elif key == "tts_voice":
         value = str(value).strip()[:200]
+    elif key == "vision_model":
+        value = str(value).strip()
+        if not 1 <= len(value) <= 100:
+            raise SettingsError("Модель зрения: имя модели Ollama, например qwen3-vl:8b")
     elif key == "image_model":
         from ..images.catalog import MODELS
         if value not in MODELS:

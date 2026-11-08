@@ -150,6 +150,10 @@ export const api = {
     return response.json();
   },
 
+  visionModels: () => request("GET", "/api/models/vision"),
+  pullModel: (name) => request("POST", "/api/models/pull", { name }),
+  pullStatus: () => request("GET", "/api/models/pull"),
+
   imagesStatus: () => request("GET", "/api/images/status"),
   imagesInstall: (reinstall = false) => request("POST", "/api/images/install", { reinstall }),
   imagesDownload: (model, mirror) => request("POST", "/api/images/download", { model, mirror }),

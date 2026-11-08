@@ -449,7 +449,7 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         </div>
         <div class="attach-list" id="attach-list" hidden></div>
         <div class="composer-box">
-          <button class="icon-btn attach-btn" id="attach-btn" type="button" title="Прикрепить файл: PDF, Word, Excel, PowerPoint, текст, код" aria-label="Прикрепить файл">
+          <button class="icon-btn attach-btn" id="attach-btn" type="button" title="Прикрепить файл: картинка, скриншот, PDF, Word, Excel, PowerPoint, текст, код" aria-label="Прикрепить файл">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.4 11.6-8.9 8.9a5.5 5.5 0 0 1-7.8-7.8l8.9-8.9a3.7 3.7 0 0 1 5.2 5.2l-8.9 8.9a1.8 1.8 0 0 1-2.6-2.6l8.2-8.2"/></svg>
           </button>
           <input type="file" id="attach-input" multiple hidden>
@@ -467,7 +467,7 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         <p class="composer-hint">Enter — отправить · Shift+Enter — новая строка<span class="hint-drop"> · файлы можно перетащить в окно</span></p>
       </form>
       <div class="drop-overlay" id="drop-overlay" hidden>
-        <div class="drop-box">📎 Отпустите, чтобы прикрепить файлы<small>PDF, Word, Excel, PowerPoint, текст, код — до 25 МБ</small></div>
+        <div class="drop-box">📎 Отпустите, чтобы прикрепить файлы<small>Картинки, PDF, Word, Excel, PowerPoint, текст, код — до 25 МБ</small></div>
       </div>
     </main>
 
@@ -601,6 +601,19 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         <div class="field">
           <label for="set-persona">Персона для новых чатов</label>
           <select id="set-persona"></select>
+        </div>
+      </div>
+
+      <div class="field vision-field">
+        <label for="set-vision">👁 Модель зрения — для вопросов с картинками</label>
+        <div class="kb-row">
+          <select id="set-vision"></select>
+          <button type="button" class="btn" id="vision-pull">Скачать</button>
+        </div>
+        <p class="hint" id="vision-note"></p>
+        <div class="tts-progress" id="vision-progress" hidden>
+          <div class="tts-bar"><div class="tts-bar-fill" id="vision-fill"></div></div>
+          <span class="hint" id="vision-progress-text"></span>
         </div>
       </div>
 

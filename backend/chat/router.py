@@ -24,6 +24,7 @@ HTTP API чата.
 """
 
 import asyncio
+import base64
 import json
 import time
 import uuid
@@ -35,6 +36,7 @@ from pydantic import BaseModel, Field
 
 from ..files import store as files_store
 from ..files.context import attachments_budget, augment_with_files, build_attachment_block
+from ..files import vision as files_vision
 from ..knowledge import store as kb_store
 from ..lessons import repository as lessons_repo
 from ..lessons.learner import format_for_prompt as lessons_block
@@ -60,6 +62,9 @@ MAX_MESSAGE_CHARS = 100_000  # защита от случайной вставк
 MEMORY_WAIT_SECONDS = 90  # сколько ждать извлечения фактов, чтобы показать «Запомнил» в чате
 MAX_TOOL_CALLS = 6  # больше вызовов инструментов за один ответ не даём — защита от зацикливания
 MAX_ATTACHMENTS = 10  # файлов в одном сообщении
+MAX_IMAGES = 4  # картинок в одном запросе к модели зрения (каждая ≈ 1000–1600 токенов)
+NO_VISION_HINT = ("Чтобы Джарвис видел картинки, нужна модель зрения: ⚙ → «Основное» → «👁 Зрение» → «Скачать» "
+                  "(рекомендую qwen3-vl:8b, ≈ 6 ГБ) или в терминале: ollama pull qwen3-vl:8b")
 
 # Ссылки на фоновые задачи извлечения памяти. Без них сборщик мусора Python
 # может удалить незавершённую задачу.
@@ -168,6 +173,8 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
     tool_log: list[dict] = []  # какие инструменты вызывались — для карточек в чате
     files_report: list[dict] = []  # какие файлы диалога ушли в контекст (целиком или выдержками)
     auto_think = False  # «размышления» включились сами (сложный вопрос)
+    images_b64: list[str] = []  # картинки для модели зрения (уменьшенные копии в base64)
+    vision_swap: str | None = None  # какую модель подменили моделью зрения
     think_reasons: list[str] = []
 
     def save(stopped: bool, stats: dict | None = None) -> dict | None:
@@ -191,6 +198,8 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             extras["files"] = files_report
         if auto_think:
             extras["auto_think"] = think_reasons
+        if images_b64:
+            extras["vision"] = {"model": model, "images": len(images_b64), "instead_of": vision_swap}
         saved["message"] = repo.add_message(
             conv_id, "assistant", content, thinking=thinking, model=model, stats=stats,
             stopped=stopped, persona_id=persona["id"], extras=extras or None,
@@ -213,6 +222,23 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             raise LLMError(f"«{model}» — модель эмбеддингов, она не умеет вести диалог. Выберите другую.")
         history = repo.list_messages(conv_id)
         user_messages = [m["content"] for m in history if m["role"] == "user"]
+
+        # Зрение (этап 14): картинки из последних сообщений. Если модель их не видит — на этот
+        # ответ подключаем модель зрения из настроек (Ollama сама освободит под неё видеопамять)
+        recent_user_ids = [m["id"] for m in history if m["role"] == "user"][-3:]
+        vision_records = files_store.vision_inputs(conv_id, recent_user_ids)
+        if vision_records:
+            for record in vision_records:
+                for path in files_vision.vision_files(files_store.path_of(record).parent, record["meta"]):
+                    if path.is_file() and len(images_b64) < MAX_IMAGES:
+                        images_b64.append(base64.b64encode(path.read_bytes()).decode("ascii"))
+            if not (info is not None and info.supports_vision):
+                vision_model = settings["vision_model"]
+                vision_info = models.get(vision_model)
+                if vision_info is None or not vision_info.supports_vision:
+                    raise LLMError(NO_VISION_HINT)
+                vision_swap = model
+                model, info = vision_model, vision_info
 
         # Авто-размышления: переключатель выключен, но вопрос сложный — модель сначала подумает
         auto_think, think_reasons = False, []
@@ -254,6 +280,13 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             history = history[:-1] + [{**history[-1], "content": augment_with_files(
                 history[-1]["content"], block, has_kb=bool(sources))}]
 
+        if images_b64:
+            names = ", ".join(f"«{r['name']}»" + (f" (скан PDF: страницы 1–{r['meta']['scan_pages']} из {r['meta']['pages']})"
+                                                     if r["meta"].get("type") == "scan" else "") for r in vision_records)
+            note = (f"[К вопросу приложены изображения: {names}. Отвечая, опирайся на то, что на них видно; "
+                    "если что-то не разобрать — так и скажи.]\n\n")
+            history = history[:-1] + [{**history[-1], "content": note + history[-1]["content"]}]
+
         # Инструменты — только если модель умеет их вызывать (qwen3, llama3.1 умеют)
         tools = tool_registry.enabled_tools(settings) if (info is not None and info.supports_tools) else []
         tools_by_name = {t.name: t for t in tools}
@@ -272,12 +305,18 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             num_ctx=settings["num_ctx"],
             system_prompt=build_system_prompt(settings, persona, model, format_for_prompt(facts),
                                               "\n\n".join(h for h in hints if h)),
-            # Если у персоны задан лимит длины ответа — столько и оставляем под ответ
-            reserve_for_answer=options.get("num_predict"),
+            # Если у персоны задан лимит длины ответа — столько и оставляем под ответ;
+            # картинки тоже занимают контекст (≈ 1 токен на квадрат 28×28) — вычитаем их из бюджета истории
+            reserve_for_answer=((options.get("num_predict") or max(1024, settings["num_ctx"] // 4))
+                                + sum(r["meta"].get("tokens", 1500) * (r["meta"].get("scan_pages") or 1)
+                                      for r in vision_records)) if images_b64 else options.get("num_predict"),
         )
+        if images_b64:
+            messages[-1]["images"] = images_b64  # формат Ollama: картинки в base64 рядом с текстом вопроса
         yield _sse("start", {
             "model": model, "think": bool(think_param), "persona_id": persona["id"],
             "auto_think": auto_think, "think_reasons": think_reasons,
+            "vision": {"model": model, "images": len(images_b64), "instead_of": vision_swap} if images_b64 else None,
             "memory": {"method": method, "facts": [{"id": f["id"], "content": f["content"]} for f in facts]},
             "knowledge": {"method": kb_method, "sources": sources},
             "tools": [t.name for t in tools],

@@ -29,6 +29,7 @@
      (голос-пустышка собирается из `tests/fake_piper.py`, нужен пакет onnx из requirements-dev.txt);
    - `node tests/e2e/images.js` — этап 13: модель, рисование со страницы и в чате, прогресс, галерея.
      Сервер — с движком-заглушкой: `IMAGE_ENGINE=fake FAKE_IMAGE_STEP=0.04 python -m backend`;
+   - `node tests/e2e/vision.js` — этап 14: вставка скриншота, скачивание модели зрения, ответ по картинке;
    - `node tests/e2e/hud.js` — интерфейс «Джарвис»: заставка, ядро, «…, сэр», озвучка
      (поддельный голос Windows), обращение, смена темы, телефон;
    - `node tests/e2e/ollama_down.js` — при остановленном эмуляторе.

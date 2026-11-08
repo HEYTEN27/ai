@@ -11,6 +11,8 @@
 """
 
 import asyncio
+import base64
+import io
 import hashlib
 import json
 import math
@@ -235,8 +237,19 @@ async def chat(request: Request):
     }
 
     question = body["messages"][-1]["content"]
+    images = body["messages"][-1].get("images") or []
     thinking = _tokens("Пользователь спрашивает. Надо ответить коротко и по делу.") if body.get("think") else []
-    if "=== Файл «" in question:
+    if images:
+        # Модель «видит» картинки: называем их размер — тесты проверят, что пришла уменьшенная копия
+        from PIL import Image as PILImage
+        sizes = []
+        for b64 in images:
+            with PILImage.open(io.BytesIO(base64.b64decode(b64))) as im:
+                sizes.append(f"{im.size[0]}x{im.size[1]}")
+        if "vision" not in model["capabilities"]:
+            return JSONResponse({"error": f'"{name}" does not support images'}, status_code=400)
+        content = _tokens(f"Вижу изображений: {len(images)} ({', '.join(sizes)}). На картинке — тестовый рисунок.")
+    elif "=== Файл «" in question:
         # Модель «прочитала» файлы: называем их и цитируем начало, чтобы тесты видели, что текст дошёл
         names = re.findall(r"=== Файл «(.+?)» \((.+?)\) ===\n(.{0,60})", question)
         real_q = question.rsplit("Вопрос пользователя:", 1)[-1].strip()
@@ -523,6 +536,40 @@ async def blob_upload(digest: str, request: Request):
         return JSONResponse({"error": "digest mismatch"}, status_code=400)
     state.setdefault("blobs", {})[digest] = len(data)
     return JSONResponse({}, status_code=201)
+
+
+# Модели, которые можно «скачать» через /api/pull (этап 14)
+PULLABLE = {
+    "qwen3-vl:8b": {
+        "family": "qwen3vl", "parameter_size": "8.8B", "quantization_level": "Q4_K_M",
+        "size": int(6.1 * GB), "capabilities": ["completion", "vision", "tools"], "gpu_share": 1.0,
+    },
+    "gemma3:4b": {
+        "family": "gemma3", "parameter_size": "4.3B", "quantization_level": "Q4_K_M",
+        "size": int(3.3 * GB), "capabilities": ["completion", "vision"], "gpu_share": 1.0,
+    },
+}
+
+
+@app.post("/api/pull")
+async def pull(request: Request):
+    name = (await request.json()).get("model")
+    if name not in PULLABLE:
+        async def fail():
+            yield json.dumps({"status": "pulling manifest"}) + "\n"
+            yield json.dumps({"error": "pull model manifest: file does not exist"}) + "\n"
+        return StreamingResponse(fail(), media_type="application/x-ndjson")
+    total = PULLABLE[name]["size"]
+
+    async def progress():
+        yield json.dumps({"status": "pulling manifest"}) + "\n"
+        for i in range(1, 11):
+            yield json.dumps({"status": "pulling 1a2b3c", "digest": "sha256:1a2b3c", "total": total,
+                              "completed": total * i // 10}) + "\n"
+            await asyncio.sleep(state.get("pull_delay", 0.15))
+        MODELS[name] = PULLABLE[name]
+        yield json.dumps({"status": "success"}) + "\n"
+    return StreamingResponse(progress(), media_type="application/x-ndjson")
 
 
 @app.post("/api/create")

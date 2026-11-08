@@ -124,7 +124,7 @@ def test_extract_formats():
 
 
 @pytest.mark.parametrize("name, error", [
-    ("фото.jpg", "Картинки"), ("старый.doc", "сохраните"), ("архив.zip", "не поддерживается"),
+    ("фото.heic", "HEIC"), ("старый.doc", "сохраните"), ("архив.zip", "не поддерживается"),
 ])
 def test_extract_rejects_unsupported(name, error):
     with pytest.raises(extract.ExtractError, match=error):
@@ -207,7 +207,8 @@ def test_upload_and_ask_about_file(client):
 
 
 def test_upload_errors_and_pending_delete(client):
-    assert _upload(client, "фото.png", b"\x89PNG").status_code == 415
+    assert _upload(client, "фото.heic", b"x").status_code == 415
+    assert _upload(client, "битая.png", b"\x89PNG").status_code == 422, "картинки принимаются, но битую — нет"
     assert _upload(client, "пусто.txt", b"   ").status_code == 422
     assert _upload(client, "битый.docx", b"not a zip").status_code == 422
     up = _upload(client, "заметка.txt", "текст".encode()).json()

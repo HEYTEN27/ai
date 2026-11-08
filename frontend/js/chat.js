@@ -7,11 +7,11 @@ import { isSpeaking, speak, stopSpeaking } from "./speech.js";
 import { copyText, enhanceCodeBlocks, renderMarkdown } from "./markdown.js";
 import { openSource } from "./knowledge.js";
 import { describeEvent, plural } from "./memory.js";
-import { describeFile, fileIcon, formatSize } from "./attachments.js";
+import { describeFile, fileIcon, formatSize, hasPreview, previewUrl } from "./attachments.js";
 import { enhanceArtifacts } from "./artifacts.js";
 import { learnAndShow } from "./lessons.js";
 import { addRunButtons } from "./coderun.js";
-import { imageResult, progressLine } from "./images.js";
+import { imageResult, openLightbox, progressLine } from "./images.js";
 
 const messagesEl = () => document.getElementById("messages");
 
@@ -62,6 +62,22 @@ function hideEmptyState() {
 
 /** Ссылка-«чип» на файл: иконка, имя, размер. Клик — скачать. */
 function fileChip(file) {
+  if (hasPreview(file)) {
+    // Картинка в сообщении — миниатюра; клик — посмотреть крупно и скачать
+    const btn = el("button", "file-thumb");
+    btn.type = "button";
+    btn.title = `${file.name} · ${describeFile(file)}`;
+    const img = document.createElement("img");
+    img.src = previewUrl(file);
+    img.alt = file.name;
+    btn.append(img);
+    if (file.meta.type === "scan") btn.append(el("span", "thumb-tag", `скан · ${file.meta.pages} стр.`));
+    btn.addEventListener("click", () => openLightbox({
+      ...file, url: file.meta.type === "scan" ? previewUrl(file) : file.url,
+      meta: { request: file.name, width: file.meta.width, height: file.meta.height },
+    }));
+    return btn;
+  }
   const a = el("a", "file-chip");
   a.href = file.url;
   a.download = file.name;
@@ -372,7 +388,7 @@ export function createAssistantMessage({ onRetry } = {}) {
      * memoryFacts — факты из памяти, которые были в контексте (из события start).
      * sources — фрагменты базы знаний, на которые модель может ссылаться [1], [2].
      */
-    finish({ message, stopped = false, error = null, memoryFacts = null, sources = null, files = null } = {}) {
+    finish({ message, stopped = false, error = null, memoryFacts = null, sources = null, files = null, vision = null } = {}) {
       msg.classList.remove("streaming", "streaming-wait");
       finished = true;
       for (const card of toolCards.values()) card.cancel(); // незавершённые инструменты — «остановлено»
@@ -411,6 +427,16 @@ export function createAssistantMessage({ onRetry } = {}) {
         mem.textContent = `🧠 ${plural(facts.length, "факт", "факта", "фактов")}`;
         mem.title = "Учтено из памяти:\n" + facts.map((f) => `• ${f.content}`).join("\n");
         metaSpan.append(meta ? " · " : "", mem);
+      }
+      // «👁 qwen3-vl:8b» — ответ дала модель зрения (смотрела на картинки)
+      const seen = vision ?? message?.extras?.vision;
+      if (seen) {
+        const tag = document.createElement("span");
+        tag.className = "meta-vision";
+        tag.textContent = `👁 ${seen.images} ${seen.images === 1 ? "картинка" : seen.images < 5 ? "картинки" : "картинок"}`;
+        tag.title = seen.instead_of ? `Ответила модель зрения ${seen.model} (вместо ${seen.instead_of}, которая картинок не видит)`
+          : `Модель ${seen.model} смотрела на картинки`;
+        metaSpan.append(metaSpan.childNodes.length ? " · " : "", tag);
       }
       // «📎 2 файла» — какие файлы диалога модель прочитала; при наведении — целиком или выдержками
       const usedFiles = files ?? message?.extras?.files ?? [];

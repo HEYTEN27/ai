@@ -67,6 +67,13 @@ def path_of(record: dict) -> Path:
     return files_dir() / record["id"] / record["name"]
 
 
+def write_extra(record: dict, name: str, data: bytes) -> Path:
+    """Дополнительный файл рядом с основным (уменьшенная копия картинки, страница скана)."""
+    path = files_dir() / record["id"] / name
+    path.write_bytes(data)
+    return path
+
+
 def create_file(
     *, kind: str, name: str, data: bytes, mime: str, conversation_id: str | None = None,
     text: str | None = None, meta: dict | None = None,
@@ -135,6 +142,27 @@ def files_for_context(conversation_id: str, limit: int = CONTEXT_FILES_LIMIT) ->
             (conversation_id, limit),
         ).fetchall()
     return [_to_dict(r, with_text=True) for r in rows]
+
+
+def vision_inputs(conversation_id: str, message_ids: list[int]) -> list[dict]:
+    """Картинки (и сканы PDF) самого свежего сообщения из message_ids, где они есть.
+
+    Так уточняющий вопрос («а что в правом углу?») всё ещё видит картинку, а старые
+    картинки из начала диалога не съедают контекст."""
+    if not message_ids:
+        return []
+    marks = ",".join("?" * len(message_ids))
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""SELECT * FROM files WHERE conversation_id = ? AND kind = 'upload' AND message_id IN ({marks})
+                ORDER BY message_id DESC, created_at, rowid""",
+            (conversation_id, *message_ids),
+        ).fetchall()
+    records = [_to_dict(r) for r in rows if json.loads(r["meta"] or "{}").get("type") in ("image", "scan")]
+    if not records:
+        return []
+    latest = records[0]["message_id"]
+    return [r for r in records if r["message_id"] == latest]
 
 
 def find_in_conversation(conversation_id: str, ref: str, extension: str) -> dict | None:
