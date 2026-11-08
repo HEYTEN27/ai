@@ -106,6 +106,14 @@ export const api = {
   resetPersona: (id) => request("POST", `/api/personas/${id}/reset`),
   deletePersona: (id) => request("DELETE", `/api/personas/${id}`),
 
+  listMemory: (q) => request("GET", `/api/memory${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  addMemory: (data) => request("POST", "/api/memory", data),
+  updateMemory: (id, data) => request("PUT", `/api/memory/${id}`, data),
+  deleteMemory: (id) => request("DELETE", `/api/memory/${id}`),
+  clearMemory: () => request("DELETE", "/api/memory?confirm=yes"),
+  memoryEvents: (limit = 50) => request("GET", `/api/memory/events?limit=${limit}`),
+  undoMemoryEvent: (id) => request("POST", `/api/memory/events/${id}/undo`),
+
   sendMessage: (id, body, onEvent, signal) =>
     streamSSE(`/api/conversations/${id}/messages`, body, onEvent, signal),
   regenerate: (id, body, onEvent, signal) =>

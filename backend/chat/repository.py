@@ -25,6 +25,7 @@ def _now() -> str:
 def _message_to_dict(row) -> dict:
     data = dict(row)
     data["stats"] = json.loads(data["stats"]) if data.get("stats") else None
+    data["extras"] = json.loads(data["extras"]) if data.get("extras") else None
     data["stopped"] = bool(data["stopped"])
     return data
 
@@ -111,13 +112,14 @@ def add_message(
     stats: dict | None = None,
     stopped: bool = False,
     persona_id: int | None = None,
+    extras: dict | None = None,
 ) -> dict:
     now = _now()
     with get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO messages
-               (conversation_id, role, content, thinking, model, stats, stopped, persona_id, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (conversation_id, role, content, thinking, model, stats, stopped, persona_id, extras, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 conv_id,
                 role,
@@ -127,6 +129,7 @@ def add_message(
                 json.dumps(stats, ensure_ascii=False) if stats else None,
                 int(stopped),
                 persona_id,
+                json.dumps(extras, ensure_ascii=False) if extras else None,
                 now,
             ),
         )

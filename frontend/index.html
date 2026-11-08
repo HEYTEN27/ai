@@ -22,6 +22,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           Новый чат
         </button>
+        <button class="btn btn-nav" id="memory-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 2a2.5 2.5 0 0 1 2.5 2.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24A2.5 2.5 0 0 0 14.5 2Z"/></svg>
+          Память
+        </button>
       </div>
       <nav class="conv-list" id="conv-list" aria-label="Диалоги"></nav>
       <div class="sidebar-footer">
@@ -64,6 +68,70 @@
       </header>
 
       <div class="banner" id="banner" hidden></div>
+
+      <!-- ===== Страница «Память» (показывается вместо чата) ===== -->
+      <section class="memory-view" id="memory-view" hidden aria-labelledby="memory-title">
+        <div class="memory-inner">
+          <header class="memory-head">
+            <h1 id="memory-title">Память</h1>
+            <p class="memory-sub" id="memory-sub">Что ассистент знает о вас. Подходящие факты подставляются в ответы. Всё хранится только на этом компьютере.</p>
+          </header>
+
+          <div class="memory-switches">
+            <label class="toggle">
+              <input type="checkbox" id="mem-enabled">
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span class="toggle-label">Использовать память в ответах</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="mem-autosave">
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span class="toggle-label">Запоминать новое автоматически</span>
+            </label>
+            <label class="mem-budget">
+              Места в контексте
+              <select id="mem-budget">
+                <option value="200">мало (~200 токенов)</option>
+                <option value="400">обычно (~400 токенов)</option>
+                <option value="800">много (~800 токенов)</option>
+                <option value="1500">очень много (~1500 токенов)</option>
+              </select>
+            </label>
+          </div>
+
+          <p class="memory-stats" id="memory-stats"></p>
+
+          <div class="memory-toolbar">
+            <input type="search" id="memory-search" placeholder="Поиск по памяти…" aria-label="Поиск по памяти">
+            <button type="button" class="btn" id="memory-add-btn">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Добавить факт
+            </button>
+          </div>
+
+          <form class="fact-form" id="memory-add-form" hidden>
+            <input id="memory-add-text" maxlength="300" placeholder="Например: Готовлюсь к сессии в январе" aria-label="Новый факт">
+            <div class="fact-form-row">
+              <select id="memory-add-category" aria-label="Категория"></select>
+              <label class="check"><input type="checkbox" id="memory-add-pinned"> Закрепить</label>
+              <span class="spacer"></span>
+              <button type="button" class="btn" id="memory-add-cancel">Отмена</button>
+              <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+          </form>
+
+          <div class="memory-list" id="memory-list"></div>
+
+          <details class="memory-journal" id="memory-journal">
+            <summary>Журнал изменений</summary>
+            <div id="memory-events"></div>
+          </details>
+
+          <div class="memory-danger">
+            <button type="button" class="btn btn-danger" id="memory-clear">Стереть всю память</button>
+          </div>
+        </div>
+      </section>
 
       <section class="messages" id="messages" aria-live="polite">
         <div class="empty" id="empty-state">

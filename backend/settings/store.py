@@ -54,6 +54,13 @@ def defaults() -> dict:
         # 0.8 ГиБ — замер на ПК пользователя (Chrome, Telegram, Wallpaper Engine).
         "vram_total_gb": 8.0,
         "vram_reserved_gb": 0.8,
+        # --- Память (этап 3) ---
+        "memory_enabled": True,  # подставлять факты о пользователе в контекст
+        "memory_autosave": True,  # запоминать новые факты автоматически после ответов
+        "memory_budget_tokens": 400,  # сколько контекста можно отдать под факты (~25 коротких фактов)
+        # Модель эмбеддингов для поиска по смыслу (память, позже — база знаний).
+        # Считается на CPU, чтобы не отнимать видеопамять у основной модели.
+        "embedding_model": "bge-m3",
     }
 
 
@@ -92,6 +99,17 @@ def _validate(key: str, value):
         value = float(value)
         if not 0 <= value <= 16:
             raise SettingsError("Занято другими программами: от 0 до 16 ГиБ")
+    elif key in ("memory_enabled", "memory_autosave"):
+        if not isinstance(value, bool):
+            raise SettingsError("Ожидается да/нет (true/false)")
+    elif key == "memory_budget_tokens":
+        value = int(value)
+        if not 50 <= value <= 4000:
+            raise SettingsError("Бюджет памяти: от 50 до 4000 токенов")
+    elif key == "embedding_model":
+        value = str(value).strip()
+        if not value:
+            raise SettingsError("Укажите модель эмбеддингов")
     else:
         raise SettingsError(f"Неизвестная настройка: {key}")
     return value

@@ -60,8 +60,12 @@ class LlamaCppBackend(LLMBackend):
         *,
         think: bool | None = None,
         options: dict | None = None,
+        format: dict | None = None,
     ) -> AsyncIterator[ChatChunk]:
         payload: dict = {"model": model, "messages": messages, "stream": True}
+        if format is not None:
+            # OpenAI-совместимый способ попросить ответ строго по JSON-схеме
+            payload["response_format"] = {"type": "json_schema", "json_schema": {"name": "result", "schema": format}}
         payload.update({k: v for k, v in (options or {}).items() if k in SUPPORTED_OPTIONS})
         if think is not None:
             # Так шаблон Qwen3 включает/выключает «размышления» в llama.cpp

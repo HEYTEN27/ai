@@ -84,3 +84,24 @@ def test_stop_saves_partial_answer_and_cancels_ollama(live_servers):
     assert 0 < len(answer["content"]) < len(fake_ollama._answer_text("Расскажи длинно"))
     assert fake_ollama.state["closed_early"] == 1, "поток к Ollama должен быть закрыт"
     assert fake_ollama.state["completed"] == 0
+
+
+def test_memory_saved_even_if_tab_closed_after_answer(live_servers):
+    """Пользователь закрыл вкладку сразу после ответа — факт всё равно должен запомниться."""
+    from backend.memory import repository as memory_repo
+
+    base = live_servers
+    fake_ollama.state["extract_delay"] = 0.8  # извлечение заведомо дольше, чем мы держим соединение
+    conv_id = httpx.post(f"{base}/api/conversations", json={}).json()["id"]
+    with httpx.stream("POST", f"{base}/api/conversations/{conv_id}/messages",
+                      json={"content": "Привет, меня зовут Олег, будем знакомы"}, timeout=10) as r:
+        for line in r.iter_lines():
+            if line.startswith("event: done"):
+                break  # закрываем соединение, не дожидаясь события memory
+    assert memory_repo.list_memories() == [], "в момент закрытия вкладки факт ещё не сохранён"
+
+    for _ in range(40):
+        if memory_repo.list_memories():
+            break
+        time.sleep(0.1)
+    assert [m["content"] for m in memory_repo.list_memories()] == ["Зовут Олег"]

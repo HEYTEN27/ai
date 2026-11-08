@@ -14,8 +14,10 @@ import {
   hideAllRetryButtons,
   removeLastAssistantMessage,
   renderHistory,
+  setMemoryLookup,
   setPersonaLookup,
 } from "./chat.js";
+import { initMemoryPage, refreshMemoryPage } from "./memory.js";
 import { initSettings } from "./settings.js";
 import { renderConversationList } from "./sidebar.js";
 import {
@@ -32,6 +34,8 @@ const state = {
   activeId: null, // открытый диалог (null = новый, ещё не созданный)
   models: new Map(), // скачанные модели по имени
   personas: [], // персоны (учитель, программист...)
+  memoryById: new Map(), // факты памяти по id — для подсказки «что учтено в ответе»
+  view: "chat", // что показано в основной области: chat | memory
   defaultPersonaId: null, // персона для новых чатов (из настроек)
   abortController: null, // не null, пока идёт генерация (для кнопки «Стоп»)
   lastStatus: null,
@@ -190,7 +194,12 @@ async function openConversation(id) {
       modelSelect.value = conv.model;
       updateThinkToggle();
     }
-    renderHistory(conv.messages, { onRetry: regenerate });
+    showChatView();
+    renderHistory(conv.messages, {
+      onRetry: regenerate,
+      memoryEvents: conv.memory_events,
+      onUndoMemory: undoMemoryEvent,
+    });
   } catch {
     // Диалог удалён или ссылка устарела — открываем новый
     newChat();
@@ -204,6 +213,7 @@ async function openConversation(id) {
 function newChat() {
   if (state.abortController) stopGeneration();
   state.activeId = null;
+  showChatView();
   setHash(null);
   setPersonaSelect(state.defaultPersonaId);
   clearMessages();
@@ -211,6 +221,54 @@ function newChat() {
   closeSidebar();
   input.focus();
 }
+
+// =====================================================================
+// Страница «Память»
+// =====================================================================
+
+// Кэш фактов: id → текст. Нужен, чтобы под старыми ответами показать, какие факты были учтены.
+async function loadMemoryCache() {
+  try {
+    const data = await api.listMemory();
+    state.memoryById = new Map(data.items.map((m) => [m.id, m.content]));
+  } catch {
+    /* память недоступна — подсказки просто будут без текста */
+  }
+}
+setMemoryLookup((id) => state.memoryById.get(id));
+
+function showMemoryView() {
+  if (state.abortController) stopGeneration();
+  state.view = "memory";
+  document.querySelector(".main").classList.add("show-memory");
+  $("memory-view").hidden = false;
+  $("memory-btn").classList.add("active");
+  history.replaceState(null, "", "#/memory");
+  state.activeId = null;
+  refreshConversations(); // снять подсветку открытого диалога
+  closeSidebar();
+  refreshMemoryPage();
+}
+
+function showChatView() {
+  if (state.view === "chat") return;
+  state.view = "chat";
+  document.querySelector(".main").classList.remove("show-memory");
+  $("memory-view").hidden = true;
+  $("memory-btn").classList.remove("active");
+}
+
+$("memory-btn").addEventListener("click", showMemoryView);
+
+// Адрес поменяли вручную или кнопкой «Назад» — открываем нужное.
+// (Наши собственные переходы идут через history.replaceState и это событие не вызывают.)
+window.addEventListener("hashchange", () => {
+  const id = idFromHash();
+  if (location.hash === "#/memory") showMemoryView();
+  else if (id && id !== state.activeId) openConversation(id);
+  else if (!location.hash) newChat();
+});
+initMemoryPage({ onChanged: loadMemoryCache });
 
 // Адрес вида #/c/<id> — чтобы после обновления страницы открылся тот же диалог
 function setHash(id) {
@@ -256,7 +314,6 @@ async function sendMessage(text) {
   await streamAnswer((onEvent, signal) =>
     api.sendMessage(state.activeId, { content: text, model, think: thinkToggle.checked }, onEvent, signal),
   );
-  refreshConversations(); // название диалога могло обновиться
 }
 
 /** «Ответить заново»: удаляем последний ответ и генерируем новый (можно другой моделью). */
@@ -285,19 +342,40 @@ async function streamAnswer(startRequest) {
 
   let finished = false;
   let started = false;
+  let released = false;
+  let memoryFacts = null;
+
+  // Ответ готов → поле ввода снова доступно. Поток при этом ещё открыт:
+  // сервер может прислать событие memory («Запомнил: …») через пару секунд.
+  const release = () => {
+    if (released) return;
+    released = true;
+    if (state.abortController === controller) state.abortController = null;
+    setGenerating(false);
+    bubble.setRetryVisible(true);
+    pollStatusNow(); // модель только что загрузилась — обновим индикатор VRAM
+    refreshConversations(); // название диалога могло обновиться
+  };
+
   const onEvent = (event, data) => {
     if ((event === "token" || event === "thinking") && !started) {
       started = true;
       bubble.startStreaming();
     }
-    if (event === "thinking") bubble.appendThinking(data.text);
+    if (event === "start") memoryFacts = data.memory?.facts || [];
+    else if (event === "thinking") bubble.appendThinking(data.text);
     else if (event === "token") bubble.appendContent(data.text);
     else if (event === "done") {
       finished = true;
-      bubble.finish({ message: data.message });
+      bubble.finish({ message: data.message, memoryFacts });
+      release();
     } else if (event === "error") {
       finished = true;
-      bubble.finish({ message: data.partial, error: data.message });
+      bubble.finish({ message: data.partial, error: data.message, memoryFacts });
+      release();
+    } else if (event === "memory") {
+      bubble.showMemoryEvents(data.events, undoMemoryEvent);
+      loadMemoryCache();
     }
   };
 
@@ -305,13 +383,24 @@ async function streamAnswer(startRequest) {
     await startRequest(onEvent, controller.signal);
     if (!finished) bubble.finish({ error: "Соединение прервалось до конца ответа." });
   } catch (e) {
-    if (e.name === "AbortError") bubble.finish({ stopped: true });
-    else bubble.finish({ error: e.message });
+    if (finished) {
+      /* ответ уже показан — обрыв во время ожидания памяти не страшен */
+    } else if (e.name === "AbortError") bubble.finish({ stopped: true, memoryFacts });
+    else bubble.finish({ error: e.message, memoryFacts });
   } finally {
-    state.abortController = null;
-    setGenerating(false);
-    bubble.setRetryVisible(true);
-    pollStatusNow(); // модель только что загрузилась — обновим индикатор VRAM
+    release();
+  }
+}
+
+/** Отмена изменения памяти из чата. Возвращает обновлённое событие (или null при ошибке). */
+async function undoMemoryEvent(ev) {
+  try {
+    const updated = await api.undoMemoryEvent(ev.id);
+    loadMemoryCache();
+    return updated;
+  } catch (e) {
+    alert(e.message);
+    return null;
   }
 }
 
@@ -414,6 +503,8 @@ function applyAssistantName(name) {
   document.title = name;
   $("assistant-name").textContent = name;
   $("greeting").textContent = `${name} на связи. Чем помочь?`;
+  $("memory-sub").textContent =
+    `Что ${name} знает о вас. Подходящие факты подставляются в ответы. Всё хранится только на этом компьютере.`;
 }
 
 function escapeHtml(s) {
@@ -428,7 +519,7 @@ function escapeHtml(s) {
 
 async function init() {
   const ok = await checkHealth();
-  await Promise.all([loadModels(), loadPersonas()]);
+  await Promise.all([loadModels(), loadPersonas(), loadMemoryCache()]);
   await refreshConversations();
 
   initSettings({
@@ -445,7 +536,8 @@ async function init() {
   });
 
   const id = idFromHash();
-  if (id) await openConversation(id);
+  if (location.hash === "#/memory") showMemoryView();
+  else if (id) await openConversation(id);
   else input.focus();
 
   let polling = ok ? startStatusPolling(onStatus) : null;

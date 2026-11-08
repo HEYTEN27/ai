@@ -162,13 +162,39 @@ class LLMBackend(ABC):
         *,
         think: bool | None = None,
         options: dict | None = None,
+        format: dict | None = None,
     ) -> AsyncIterator[ChatChunk]:
         """Потоковая генерация ответа.
 
         messages — список {"role": "user"|"assistant"|"system", "content": "..."}.
         think    — включить «размышления» (только для моделей, которые это умеют).
         options  — параметры генерации: num_ctx, temperature и т.д.
+        format   — JSON-схема: модель обязана ответить JSON-объектом такой структуры
+                   (используется памятью, чтобы надёжно разбирать ответ программой).
         """
+
+    async def complete(
+        self,
+        model: str,
+        messages: list[dict],
+        *,
+        think: bool | None = None,
+        options: dict | None = None,
+        format: dict | None = None,
+    ) -> str:
+        """То же, что chat_stream, но возвращает весь ответ одной строкой (для служебных запросов)."""
+        parts = []
+        async for chunk in self.chat_stream(model, messages, think=think, options=options, format=format):
+            if chunk.kind == "content":
+                parts.append(chunk.text)
+        return "".join(parts)
+
+    async def embed(self, model: str, texts: list[str], *, on_gpu: bool = False) -> list[list[float]]:
+        """Эмбеддинги — превращает тексты в векторы чисел, похожие по смыслу тексты дают близкие векторы.
+
+        on_gpu=False — считать на процессоре, чтобы не отнимать видеопамять у основной модели.
+        """
+        raise LLMError("Этот движок не умеет считать эмбеддинги — используется поиск по словам.")
 
     async def loaded_models(self) -> list[LoadedModel] | None:
         """Какие модели сейчас в памяти. None = движок не умеет об этом сообщать."""

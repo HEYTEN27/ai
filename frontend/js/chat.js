@@ -3,6 +3,7 @@
 // =====================================================================
 
 import { copyText, enhanceCodeBlocks, renderMarkdown } from "./markdown.js";
+import { describeEvent, plural } from "./memory.js";
 
 const messagesEl = () => document.getElementById("messages");
 
@@ -10,6 +11,12 @@ const messagesEl = () => document.getElementById("messages");
 let personaLookup = () => null;
 export function setPersonaLookup(fn) {
   personaLookup = fn;
+}
+
+// «id факта → текст факта» — для подсказки «какие факты из памяти учтены в ответе»
+let memoryLookup = () => null;
+export function setMemoryLookup(fn) {
+  memoryLookup = fn;
 }
 
 const ICONS = {
@@ -141,8 +148,11 @@ export function createAssistantMessage({ onRetry } = {}) {
       scheduleRender();
     },
 
-    /** Генерация закончена (успешно, остановлена или с ошибкой). */
-    finish({ message, stopped = false, error = null } = {}) {
+    /**
+     * Генерация закончена (успешно, остановлена или с ошибкой).
+     * memoryFacts — факты из памяти, которые были в контексте (из события start).
+     */
+    finish({ message, stopped = false, error = null, memoryFacts = null } = {}) {
       msg.classList.remove("streaming", "streaming-wait");
       if (message) {
         content = message.content ?? content;
@@ -165,6 +175,16 @@ export function createAssistantMessage({ onRetry } = {}) {
         tag.textContent = meta ? " · остановлено" : "остановлено";
         metaSpan.append(tag);
       }
+      // «🧠 3 факта» — сколько фактов из памяти было в контексте; при наведении — какие
+      const facts = memoryFacts
+        ?? (message?.extras?.memory_ids || []).map((id) => ({ id, content: memoryLookup(id) ?? "(факт уже удалён)" }));
+      if (facts.length) {
+        const mem = document.createElement("span");
+        mem.className = "meta-memory";
+        mem.textContent = `🧠 ${plural(facts.length, "факт", "факта", "фактов")}`;
+        mem.title = "Учтено из памяти:\n" + facts.map((f) => `• ${f.content}`).join("\n");
+        metaSpan.append(meta ? " · " : "", mem);
+      }
       metaEl.hidden = !(content || meta);
 
       if (error) {
@@ -179,13 +199,61 @@ export function createAssistantMessage({ onRetry } = {}) {
     setRetryVisible(visible) {
       retryBtn.hidden = !visible;
     },
+
+    /** Под ответом: «💾 Запомнил: «…» · Отменить». onUndo(event) возвращает обновлённое событие. */
+    showMemoryEvents(events, onUndo) {
+      if (!events?.length) return;
+      let box = msg.querySelector(".memory-notes");
+      if (!box) {
+        box = document.createElement("div");
+        box.className = "memory-notes";
+        msg.append(box);
+      }
+      for (const ev of events) box.append(memoryNote(ev, onUndo));
+    },
   };
 }
 
+const NOTE_ICONS = { add: "💾", update: "✏️", delete: "🗑️" };
+
+function memoryNote(ev, onUndo) {
+  const note = document.createElement("div");
+  note.className = "memory-note" + (ev.undone ? " undone" : "");
+  const { label, text } = describeEvent(ev);
+  const span = document.createElement("span");
+  span.className = "note-text";
+  span.innerHTML = `${NOTE_ICONS[ev.action]} <b></b> `;
+  span.querySelector("b").textContent = `${label}:`;
+  span.append(text);
+  note.append(span);
+  if (ev.undone) {
+    note.append(" · отменено");
+  } else if (onUndo) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "link-btn small";
+    btn.textContent = "Отменить";
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const updated = await onUndo(ev);
+      if (updated) note.replaceWith(memoryNote(updated, onUndo));
+      else btn.disabled = false;
+    });
+    note.append(" · ", btn);
+  }
+  return note;
+}
+
 /** Рисует всю историю диалога. Кнопка «Повторить» — только у последнего ответа. */
-export function renderHistory(messages, { onRetry } = {}) {
+export function renderHistory(messages, { onRetry, memoryEvents = [], onUndoMemory } = {}) {
   clearMessages();
   if (!messages.length) return;
+  // События памяти по id ответа, после которого они случились (в журнале — от новых к старым)
+  const eventsByMessage = new Map();
+  for (const ev of [...memoryEvents].reverse()) {
+    if (!eventsByMessage.has(ev.message_id)) eventsByMessage.set(ev.message_id, []);
+    eventsByMessage.get(ev.message_id).push(ev);
+  }
   let lastAssistant = null;
   for (const m of messages) {
     if (m.role === "user") {
@@ -193,6 +261,7 @@ export function renderHistory(messages, { onRetry } = {}) {
     } else if (m.role === "assistant") {
       lastAssistant = createAssistantMessage({ onRetry });
       lastAssistant.finish({ message: m });
+      lastAssistant.showMemoryEvents(eventsByMessage.get(m.id), onUndoMemory);
     }
   }
   if (lastAssistant && messages.at(-1).role === "assistant") lastAssistant.setRetryVisible(true);

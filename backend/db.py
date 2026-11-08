@@ -78,6 +78,46 @@ MIGRATIONS: list[str] = [
     ALTER TABLE conversations ADD COLUMN persona_id INTEGER REFERENCES personas(id) ON DELETE SET NULL;
     ALTER TABLE messages ADD COLUMN persona_id INTEGER REFERENCES personas(id) ON DELETE SET NULL;
     """,
+    # --- Миграция 3 (этап 3): долговременная память ---
+    """
+    -- Факты о пользователе. Память — про человека, а не про диалог, поэтому
+    -- при удалении диалога факты остаются (conversation_id становится NULL).
+    CREATE TABLE memories (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        content          TEXT NOT NULL,             -- «Учится на 3 курсе»
+        category         TEXT NOT NULL DEFAULT 'другое',
+        pinned           INTEGER NOT NULL DEFAULT 0,  -- 1 = подставлять в контекст всегда
+        source           TEXT NOT NULL DEFAULT 'auto',  -- auto (запомнил сам) | manual (добавлен вручную)
+        conversation_id  TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+        embedding        BLOB,                      -- вектор смысла (float32), считается лениво
+        embedding_model  TEXT,                      -- какой моделью посчитан вектор
+        use_count        INTEGER NOT NULL DEFAULT 0,  -- сколько раз факт попал в контекст
+        last_used_at     TEXT,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+    );
+
+    -- Журнал изменений памяти: что запомнено, изменено, забыто. Нужен, чтобы
+    -- показать это в чате и дать кнопку «Отменить».
+    CREATE TABLE memory_events (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id        INTEGER,                   -- без внешнего ключа: факт может быть уже удалён
+        action           TEXT NOT NULL CHECK (action IN ('add', 'update', 'delete')),
+        old_content      TEXT,
+        new_content      TEXT,
+        category         TEXT,
+        source           TEXT NOT NULL DEFAULT 'auto',  -- auto | manual
+        conversation_id  TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+        message_id       INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+        undone           INTEGER NOT NULL DEFAULT 0,
+        created_at       TEXT NOT NULL
+    );
+    CREATE INDEX idx_memory_events_conv ON memory_events(conversation_id);
+
+    -- Доп. сведения об ответе (JSON): какие факты из памяти были в контексте,
+    -- позже — какие документы использовались (этап 4)
+    ALTER TABLE messages ADD COLUMN extras TEXT;
+    """,
 ]
 
 

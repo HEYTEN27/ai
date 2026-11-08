@@ -139,6 +139,7 @@ class OllamaBackend(LLMBackend):
         *,
         think: bool | None = None,
         options: dict | None = None,
+        format: dict | None = None,
     ) -> AsyncIterator[ChatChunk]:
         payload: dict = {
             "model": model,
@@ -151,6 +152,8 @@ class OllamaBackend(LLMBackend):
         # «размышлений» (например llama3.1) на него отвечают ошибкой.
         if think is not None:
             payload["think"] = think
+        if format is not None:
+            payload["format"] = format  # Ollama ограничит ответ этой JSON-схемой
 
         try:
             async with self._client.stream("POST", "/api/chat", json=payload) as response:
@@ -198,6 +201,22 @@ class OllamaBackend(LLMBackend):
             "total_seconds": round((data.get("total_duration") or 0) / 1e9, 2),
             "done_reason": data.get("done_reason"),
         }
+
+    async def embed(self, model: str, texts: list[str], *, on_gpu: bool = False) -> list[list[float]]:
+        payload: dict = {"model": model, "input": texts, "keep_alive": "10m"}
+        if not on_gpu:
+            # num_gpu = 0 — ни одного слоя на видеокарту: эмбеддинг-модель живёт в обычной RAM
+            # и не вытесняет qwen3:8b из видеопамяти (её там и так впритык)
+            payload["options"] = {"num_gpu": 0}
+        try:
+            r = await self._client.post("/api/embed", json=payload)
+        except httpx.ConnectError as e:
+            raise self._connection_error() from e
+        except httpx.HTTPError as e:
+            raise LLMError(f"Ошибка эмбеддингов: {e}") from e
+        if r.status_code != 200:
+            raise LLMError(f"Ollama (эмбеддинги): {self._error_text(r)}")
+        return r.json().get("embeddings") or []
 
     async def loaded_models(self) -> list[LoadedModel] | None:
         try:

@@ -32,6 +32,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..llm import LLMError, get_backend
+from ..memory import repository as memory_repo
+from ..memory.extraction import extract_and_apply
+from ..memory.retrieval import format_for_prompt, select_facts
 from ..settings import personas as personas_repo
 from ..settings import store as settings_store
 from . import repository as repo
@@ -41,6 +44,11 @@ from .prompts import build_system_prompt, generation_options
 router = APIRouter(prefix="/api/conversations", tags=["chat"])
 
 MAX_MESSAGE_CHARS = 100_000  # защита от случайной вставки гигантского текста
+MEMORY_WAIT_SECONDS = 90  # сколько ждать извлечения фактов, чтобы показать «Запомнил» в чате
+
+# Ссылки на фоновые задачи извлечения памяти. Без них сборщик мусора Python
+# может удалить незавершённую задачу.
+_background_tasks: set[asyncio.Task] = set()
 TITLE_MAX_CHARS = 60
 
 
@@ -130,6 +138,7 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
     persona = resolve_persona(repo.get_conversation(conv_id) or {}, settings)
 
     saved: dict = {}  # защита от двойного сохранения (например, «Стоп» пришёл после done)
+    facts: list[dict] = []  # факты из памяти, подставленные в контекст
 
     def save(stopped: bool, stats: dict | None = None) -> dict | None:
         if "message" in saved:
@@ -141,6 +150,7 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
         saved["message"] = repo.add_message(
             conv_id, "assistant", content, thinking=thinking, model=model, stats=stats,
             stopped=stopped, persona_id=persona["id"],
+            extras={"memory_ids": [f["id"] for f in facts]} if facts else None,
         )
         return saved["message"]
 
@@ -156,15 +166,32 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             raise LLMError(f"«{model}» — модель эмбеддингов, она не умеет вести диалог. Выберите другую.")
         think_param = think if (info is not None and info.supports_thinking) else None
 
+        history = repo.list_messages(conv_id)
+        user_messages = [m["content"] for m in history if m["role"] == "user"]
+
+        # Долговременная память: выбираем факты о пользователе, подходящие к вопросу.
+        # Ищем по двум последним вопросам — «а на нём можно?» без предыдущего непонятно.
+        method = "off"
+        if settings["memory_enabled"]:
+            facts, method = await select_facts(
+                backend, "\n".join(user_messages[-2:]),
+                budget_tokens=settings["memory_budget_tokens"],
+                embedding_model=settings["embedding_model"],
+            )
+            memory_repo.mark_used([f["id"] for f in facts])
+
         options = generation_options(settings, persona)
         messages = build_messages(
-            repo.list_messages(conv_id),
+            history,
             num_ctx=settings["num_ctx"],
-            system_prompt=build_system_prompt(settings, persona, model),
+            system_prompt=build_system_prompt(settings, persona, model, format_for_prompt(facts)),
             # Если у персоны задан лимит длины ответа — столько и оставляем под ответ
             reserve_for_answer=options.get("num_predict"),
         )
-        yield _sse("start", {"model": model, "think": bool(think_param), "persona_id": persona["id"]})
+        yield _sse("start", {
+            "model": model, "think": bool(think_param), "persona_id": persona["id"],
+            "memory": {"method": method, "facts": [{"id": f["id"], "content": f["content"]} for f in facts]},
+        })
 
         stats = None
         # aclosing гарантирует, что поток к Ollama закроется, даже если браузер оборвал соединение
@@ -183,6 +210,25 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
 
         message = save(stopped=False, stats=stats)
         yield _sse("done", {"message": message})
+
+        # Ответ готов — теперь ищем в этом обмене новые факты о пользователе.
+        # Делаем это в отдельной задаче: даже если пользователь закроет вкладку,
+        # запоминание доведётся до конца.
+        if settings["memory_enabled"] and settings["memory_autosave"] and message and user_messages:
+            task = asyncio.create_task(extract_and_apply(
+                backend, model=model, think_supported=bool(info and info.supports_thinking),
+                num_ctx=settings["num_ctx"], user_text=user_messages[-1], answer_text=message["content"],
+                known=facts, conversation_id=conv_id, message_id=message["id"],
+            ))
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
+            try:
+                # shield — если браузер отключится, отменится только ожидание, а не сама задача
+                events = await asyncio.wait_for(asyncio.shield(task), timeout=MEMORY_WAIT_SECONDS)
+            except asyncio.TimeoutError:
+                events = []
+            if events:
+                yield _sse("memory", {"events": events})
 
     except LLMError as e:
         message = save(stopped=True)  # частичный ответ всё равно сохраняем
@@ -213,7 +259,12 @@ def create_conversation(body: ConversationCreate):
 @router.get("/{conv_id}")
 def get_conversation(conv_id: str):
     conv = _get_or_404(conv_id)
-    return {**conv, "messages": repo.list_messages(conv_id)}
+    return {
+        **conv,
+        "messages": repo.list_messages(conv_id),
+        # Что Джарвис запомнил в этом диалоге — чтобы показать под нужными ответами
+        "memory_events": memory_repo.list_events(conversation_id=conv_id, limit=500),
+    }
 
 
 @router.patch("/{conv_id}")
