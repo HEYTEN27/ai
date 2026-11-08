@@ -61,6 +61,15 @@ def defaults() -> dict:
         # Модель эмбеддингов для поиска по смыслу (память, позже — база знаний).
         # Считается на CPU, чтобы не отнимать видеопамять у основной модели.
         "embedding_model": "bge-m3",
+        # --- База знаний (этап 4) ---
+        "rag_top_k": 6,  # сколько фрагментов подставлять в ответ (максимум)
+        "rag_budget_tokens": 2500,  # сколько контекста можно отдать под фрагменты
+        "rag_min_score": 0.45,  # порог похожести по смыслу: ниже — фрагмент считается нерелевантным
+        "chunk_size": 1200,  # размер фрагмента в символах (~400 токенов)
+        "chunk_overlap": 200,  # перекрытие соседних фрагментов, чтобы мысль не обрывалась на границе
+        # Считать эмбеддинги документов на видеокарте: в разы быстрее, но на время
+        # индексации Ollama выгрузит основную модель из видеопамяти.
+        "embedding_on_gpu": False,
     }
 
 
@@ -99,13 +108,33 @@ def _validate(key: str, value):
         value = float(value)
         if not 0 <= value <= 16:
             raise SettingsError("Занято другими программами: от 0 до 16 ГиБ")
-    elif key in ("memory_enabled", "memory_autosave"):
+    elif key in ("memory_enabled", "memory_autosave", "embedding_on_gpu"):
         if not isinstance(value, bool):
             raise SettingsError("Ожидается да/нет (true/false)")
     elif key == "memory_budget_tokens":
         value = int(value)
         if not 50 <= value <= 4000:
             raise SettingsError("Бюджет памяти: от 50 до 4000 токенов")
+    elif key == "rag_top_k":
+        value = int(value)
+        if not 1 <= value <= 20:
+            raise SettingsError("Фрагментов в ответе: от 1 до 20")
+    elif key == "rag_budget_tokens":
+        value = int(value)
+        if not 300 <= value <= 30000:
+            raise SettingsError("Место под фрагменты: от 300 до 30000 токенов")
+    elif key == "rag_min_score":
+        value = float(value)
+        if not 0 <= value <= 1:
+            raise SettingsError("Порог похожести: от 0 до 1")
+    elif key == "chunk_size":
+        value = int(value)
+        if not 300 <= value <= 6000:
+            raise SettingsError("Размер фрагмента: от 300 до 6000 символов")
+    elif key == "chunk_overlap":
+        value = int(value)
+        if not 0 <= value <= 1000:
+            raise SettingsError("Перекрытие: от 0 до 1000 символов")
     elif key == "embedding_model":
         value = str(value).strip()
         if not value:

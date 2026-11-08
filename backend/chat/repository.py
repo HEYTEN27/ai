@@ -34,15 +34,16 @@ def _message_to_dict(row) -> dict:
 
 
 def create_conversation(
-    title: str = DEFAULT_TITLE, model: str | None = None, persona_id: int | None = None
+    title: str = DEFAULT_TITLE, model: str | None = None, persona_id: int | None = None,
+    kb_scope: str = "all",
 ) -> dict:
     conv_id = str(uuid.uuid4())
     now = _now()
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO conversations (id, title, model, persona_id, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (conv_id, title, model, persona_id, now, now),
+            "INSERT INTO conversations (id, title, model, persona_id, kb_scope, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (conv_id, title, model, persona_id, kb_scope, now, now),
         )
     return get_conversation(conv_id)
 
@@ -51,7 +52,7 @@ def list_conversations() -> list[dict]:
     """Все диалоги, свежие сверху."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT id, title, model, persona_id, created_at, updated_at FROM conversations "
+            "SELECT id, title, model, persona_id, kb_scope, created_at, updated_at FROM conversations "
             "ORDER BY updated_at DESC"
         ).fetchall()
     return [dict(r) for r in rows]
@@ -64,10 +65,14 @@ def get_conversation(conv_id: str) -> dict | None:
 
 
 def update_conversation(
-    conv_id: str, *, title: str | None = None, model: str | None = None, persona_id=_UNSET
+    conv_id: str, *, title: str | None = None, model: str | None = None, persona_id=_UNSET,
+    kb_scope: str | None = None,
 ) -> dict | None:
     """Меняет только переданные поля."""
     fields, values = [], []
+    if kb_scope is not None:
+        fields.append("kb_scope = ?")
+        values.append(kb_scope)
     if persona_id is not _UNSET:
         fields.append("persona_id = ?")
         values.append(persona_id)

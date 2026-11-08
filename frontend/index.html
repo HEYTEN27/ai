@@ -26,6 +26,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 2a2.5 2.5 0 0 1 2.5 2.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24A2.5 2.5 0 0 0 14.5 2Z"/></svg>
           Память
         </button>
+        <button class="btn btn-nav" id="knowledge-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+          База знаний
+        </button>
       </div>
       <nav class="conv-list" id="conv-list" aria-label="Диалоги"></nav>
       <div class="sidebar-footer">
@@ -146,7 +150,65 @@
         </div>
       </section>
 
+      <!-- ===== Страница «База знаний» ===== -->
+      <section class="page-view knowledge-view" id="knowledge-view" hidden aria-labelledby="knowledge-title">
+        <div class="memory-inner">
+          <header class="memory-head">
+            <h1 id="knowledge-title">База знаний</h1>
+            <p class="memory-sub" id="knowledge-sub">Документы, по которым ассистент отвечает со ссылками на источник. Всё хранится и обрабатывается на этом компьютере.</p>
+          </header>
+
+          <p class="memory-stats" id="kb-stats"></p>
+
+          <div class="kb-cards">
+            <div class="kb-card">
+              <h3>Загрузить файлы</h3>
+              <label class="dropzone" id="kb-dropzone">
+                <input type="file" id="kb-file-input" multiple accept=".pdf,.docx,.txt,.md,.markdown" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+                <span>Перетащите файлы сюда или <u>выберите</u></span>
+                <small>PDF, DOCX, TXT, MD · до 50 МБ</small>
+              </label>
+              <div class="kb-row">
+                <label class="kb-label" for="kb-upload-collection">В коллекцию</label>
+                <select id="kb-upload-collection"></select>
+              </div>
+              <p class="form-error" id="kb-upload-error" hidden></p>
+            </div>
+
+            <form class="kb-card" id="kb-folder-form">
+              <h3>Подключить папку</h3>
+              <p class="hint">Например, хранилище Obsidian. Заметки читаются прямо из папки —
+                после правок нажмите «Синхронизировать».</p>
+              <input id="kb-folder-path" placeholder="C:\Users\имя\Documents\Obsidian Vault" aria-label="Путь к папке" spellcheck="false">
+              <div class="kb-row">
+                <span class="spacer"></span>
+                <button type="submit" class="btn btn-primary">Подключить</button>
+              </div>
+              <p class="form-error" id="kb-folder-error" hidden></p>
+            </form>
+          </div>
+
+          <div id="kb-collections"></div>
+
+          <details class="memory-journal" id="kb-search-box">
+            <summary>Проверить поиск</summary>
+            <form class="memory-toolbar kb-search-form" id="kb-search-form">
+              <input type="search" id="kb-search-input" placeholder="Вопрос — посмотрим, какие фрагменты найдутся" aria-label="Проверить поиск">
+              <button type="submit" class="btn">Найти</button>
+            </form>
+            <div id="kb-search-results"></div>
+          </details>
+        </div>
+      </section>
+
       <form class="composer" id="composer">
+        <div class="kb-scope-row" id="kb-scope-row" hidden>
+          <label class="kb-scope" title="Где искать ответы: в ваших документах или нет">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+            <select id="kb-scope" aria-label="База знаний"></select>
+          </label>
+        </div>
         <div class="composer-box">
           <textarea id="input" rows="1" placeholder="Напишите сообщение…" aria-label="Сообщение"></textarea>
           <button class="send-btn" id="send-btn" type="submit" aria-label="Отправить" disabled>
@@ -158,6 +220,24 @@
       </form>
     </main>
   </div>
+
+  <!-- ===== Просмотр источника (по клику на [1] в ответе) ===== -->
+  <dialog class="settings source-dialog" id="source-dialog" aria-labelledby="source-title">
+    <div class="settings-head">
+      <h2 id="source-title">Источник</h2>
+      <span class="spacer"></span>
+      <button type="button" class="icon-btn" id="source-close" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <p class="source-meta" id="source-meta"></p>
+      <div class="source-text" id="source-text"></div>
+      <div class="settings-actions">
+        <a class="btn btn-primary" id="source-open" target="_blank" rel="noopener">Открыть документ</a>
+      </div>
+    </div>
+  </dialog>
 
   <!-- ===== Окно настроек ===== -->
   <dialog class="settings" id="settings-dialog" aria-labelledby="settings-title">

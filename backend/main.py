@@ -16,6 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from .chat.router import router as chat_router
 from .config import PROJECT_ROOT
 from .db import init_db
+from .knowledge.indexer import indexer
+from .knowledge.router import router as knowledge_router
 from .llm import get_backend
 from .memory.router import router as memory_router
 from .settings.personas import ensure_builtin as ensure_builtin_personas
@@ -28,8 +30,10 @@ async def lifespan(app: FastAPI):
     # --- при старте сервера ---
     init_db()
     ensure_builtin_personas()  # учитель, программист, редактор... — если их ещё нет в базе
+    indexer.start()  # фоновая очередь индексации документов базы знаний
     yield
     # --- при остановке сервера ---
+    await indexer.stop()
     await get_backend().close()
 
 
@@ -39,6 +43,7 @@ app.include_router(system_router)
 app.include_router(chat_router)
 app.include_router(settings_router)
 app.include_router(memory_router)
+app.include_router(knowledge_router)
 
 # Статика монтируется ПОСЛЕДНЕЙ: всё, что не /api/..., отдаётся как файлы интерфейса.
 # html=True — по адресу "/" отдаётся index.html.

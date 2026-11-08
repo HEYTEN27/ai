@@ -114,6 +114,27 @@ export const api = {
   memoryEvents: (limit = 50) => request("GET", `/api/memory/events?limit=${limit}`),
   undoMemoryEvent: (id) => request("POST", `/api/memory/events/${id}/undo`),
 
+  knowledge: () => request("GET", "/api/knowledge"),
+  createCollection: (name) => request("POST", "/api/knowledge/collections", { name }),
+  renameCollection: (id, name) => request("PATCH", `/api/knowledge/collections/${id}`, { name }),
+  deleteCollection: (id) => request("DELETE", `/api/knowledge/collections/${id}`),
+  addFolder: (path) => request("POST", "/api/knowledge/folders", { path }),
+  syncCollection: (id) => request("POST", `/api/knowledge/collections/${id}/sync`),
+  deleteDocument: (id) => request("DELETE", `/api/knowledge/documents/${id}`),
+  reindexDocument: (id) => request("POST", `/api/knowledge/documents/${id}/reindex`),
+  getChunk: (id) => request("GET", `/api/knowledge/chunks/${id}`),
+  searchKnowledge: (q) => request("GET", `/api/knowledge/search?q=${encodeURIComponent(q)}`),
+  reembed: () => request("POST", "/api/knowledge/reembed"),
+  /** Загрузка файлов: multipart/form-data, поэтому не через request() с JSON. */
+  async uploadFiles(files, collectionId) {
+    const form = new FormData();
+    for (const f of files) form.append("files", f);
+    if (collectionId) form.append("collection_id", collectionId);
+    const response = await fetch("/api/knowledge/upload", { method: "POST", body: form });
+    if (!response.ok) throw new Error(await errorText(response));
+    return response.json();
+  },
+
   sendMessage: (id, body, onEvent, signal) =>
     streamSSE(`/api/conversations/${id}/messages`, body, onEvent, signal),
   regenerate: (id, body, onEvent, signal) =>

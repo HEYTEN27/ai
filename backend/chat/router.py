@@ -31,6 +31,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..knowledge import store as kb_store
+from ..knowledge.search import augment_question, build_query, sources_for_message
+from ..knowledge.search import search as kb_search
 from ..llm import LLMError, get_backend
 from ..memory import repository as memory_repo
 from ..memory.extraction import extract_and_apply
@@ -59,12 +62,14 @@ class ConversationCreate(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     model: str | None = None
     persona_id: int | None = None  # не указана — персона по умолчанию из настроек
+    kb_scope: str = "all"  # база знаний: all — вся, off — не использовать, "<id>" — одна коллекция
 
 
 class ConversationUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     model: str | None = None
     persona_id: int | None = None
+    kb_scope: str | None = None
 
 
 class MessageCreate(BaseModel):
@@ -95,6 +100,13 @@ def resolve_persona(conv: dict, settings: dict) -> dict:
         or personas_repo.get_persona(settings["default_persona_id"])
         or personas_repo.fallback_persona()
     )
+
+
+def _check_kb_scope(scope: str) -> None:
+    if scope in ("all", "off"):
+        return
+    if not scope.isdigit() or kb_store.get_collection(int(scope)) is None:
+        raise HTTPException(status_code=422, detail="Такой коллекции в базе знаний нет")
 
 
 def _check_persona(persona_id: int | None) -> None:
@@ -139,6 +151,7 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
 
     saved: dict = {}  # защита от двойного сохранения (например, «Стоп» пришёл после done)
     facts: list[dict] = []  # факты из памяти, подставленные в контекст
+    sources: list[dict] = []  # фрагменты из базы знаний (для ссылок [1], [2])
 
     def save(stopped: bool, stats: dict | None = None) -> dict | None:
         if "message" in saved:
@@ -147,10 +160,15 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
         thinking = "".join(thinking_parts)
         if not content and not thinking:
             return None  # нечего сохранять
+        # Что было в контексте ответа: факты из памяти и источники из базы знаний
+        extras = {}
+        if facts:
+            extras["memory_ids"] = [f["id"] for f in facts]
+        if sources:
+            extras["sources"] = sources
         saved["message"] = repo.add_message(
             conv_id, "assistant", content, thinking=thinking, model=model, stats=stats,
-            stopped=stopped, persona_id=persona["id"],
-            extras={"memory_ids": [f["id"] for f in facts]} if facts else None,
+            stopped=stopped, persona_id=persona["id"], extras=extras or None,
         )
         return saved["message"]
 
@@ -180,6 +198,21 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             )
             memory_repo.mark_used([f["id"] for f in facts])
 
+        # База знаний: ищем фрагменты документов, подходящие к вопросу
+        conv = repo.get_conversation(conv_id) or {}
+        scope = conv.get("kb_scope") or "all"
+        kb_method = "off"
+        if scope != "off" and user_messages and kb_store.stats()["ready"]:
+            chunks, kb_method = await kb_search(
+                backend, build_query(user_messages),
+                collection_id=int(scope) if scope.isdigit() else None, settings=settings,
+            )
+            if chunks:
+                sources = sources_for_message(chunks)
+                # Подменяем последний вопрос на «фрагменты + правила + вопрос» — только в запросе
+                # к модели; в базе вопрос остаётся как есть
+                history = history[:-1] + [{**history[-1], "content": augment_question(history[-1]["content"], chunks)}]
+
         options = generation_options(settings, persona)
         messages = build_messages(
             history,
@@ -191,6 +224,7 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
         yield _sse("start", {
             "model": model, "think": bool(think_param), "persona_id": persona["id"],
             "memory": {"method": method, "facts": [{"id": f["id"], "content": f["content"]} for f in facts]},
+            "knowledge": {"method": kb_method, "sources": sources},
         })
 
         stats = None
@@ -251,8 +285,10 @@ def list_conversations():
 @router.post("", status_code=201)
 def create_conversation(body: ConversationCreate):
     _check_persona(body.persona_id)
+    _check_kb_scope(body.kb_scope)
     return repo.create_conversation(
-        title=body.title or repo.DEFAULT_TITLE, model=body.model, persona_id=body.persona_id
+        title=body.title or repo.DEFAULT_TITLE, model=body.model, persona_id=body.persona_id,
+        kb_scope=body.kb_scope,
     )
 
 
@@ -271,6 +307,9 @@ def get_conversation(conv_id: str):
 def update_conversation(conv_id: str, body: ConversationUpdate):
     _get_or_404(conv_id)
     changes = {"title": body.title, "model": body.model}
+    if body.kb_scope is not None:
+        _check_kb_scope(body.kb_scope)
+        changes["kb_scope"] = body.kb_scope
     # persona_id меняем, только если поле реально прислали (null = вернуть персону по умолчанию)
     if "persona_id" in body.model_fields_set:
         _check_persona(body.persona_id)

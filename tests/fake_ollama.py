@@ -156,7 +156,15 @@ async def chat(request: Request):
 
     question = body["messages"][-1]["content"]
     thinking = _tokens("Пользователь спрашивает. Надо ответить коротко и по делу.") if body.get("think") else []
-    content = _tokens(_answer_text(question))
+    if "Фрагменты из базы знаний" in question:
+        # Как настоящая модель с RAG: отвечает по фрагментам и ставит ссылки на источники
+        n_sources = len(re.findall(r"^\[\d+\] ", question, re.MULTILINE))
+        cites = " ".join(f"[{i}]" for i in range(1, n_sources + 1))
+        real_q = question.rsplit("Вопрос пользователя:", 1)[-1].strip()
+        content = _tokens(f"По вашим материалам {cites}: ответ на «{real_q[:60]}». "
+                          f"Ссылка на несуществующий источник [{n_sources + 5}] должна остаться текстом.")
+    else:
+        content = _tokens(_answer_text(question))
 
     async def stream():
         finished = False
@@ -233,7 +241,7 @@ async def _extraction(body: dict):
 # ---------- эмбеддинги ----------
 
 
-def _fake_vector(text: str, dims: int = 64) -> list[float]:
+def _fake_vector(text: str, dims: int = 1024) -> list[float]:
     """«Смысловой» вектор из корней слов: тексты с общими корнями получают близкие векторы."""
     vec = [0.0] * dims
     for word in re.findall(r"[a-zа-яё0-9]+", text.lower().replace("ё", "е")):

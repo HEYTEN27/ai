@@ -17,6 +17,7 @@ import {
   setMemoryLookup,
   setPersonaLookup,
 } from "./chat.js";
+import { initKnowledgePage, refreshKnowledgePage } from "./knowledge.js";
 import { initMemoryPage, refreshMemoryPage } from "./memory.js";
 import { initSettings } from "./settings.js";
 import { renderConversationList } from "./sidebar.js";
@@ -190,6 +191,7 @@ async function openConversation(id) {
     state.activeId = conv.id;
     setHash(conv.id);
     setPersonaSelect(conv.persona_id ?? state.defaultPersonaId);
+    setKnowledgeScope(conv.kb_scope || "all");
     if (conv.model && state.models.has(conv.model)) {
       modelSelect.value = conv.model;
       updateThinkToggle();
@@ -216,6 +218,7 @@ function newChat() {
   showChatView();
   setHash(null);
   setPersonaSelect(state.defaultPersonaId);
+  setKnowledgeScope("all");
   clearMessages();
   refreshConversations();
   closeSidebar();
@@ -237,37 +240,96 @@ async function loadMemoryCache() {
 }
 setMemoryLookup((id) => state.memoryById.get(id));
 
-function showMemoryView() {
+// Страницы, которые показываются вместо чата: адрес, секция, кнопка в боковой панели, обновление
+const PAGES = {
+  memory: { hash: "#/memory", view: "memory-view", button: "memory-btn", refresh: () => refreshMemoryPage() },
+  knowledge: { hash: "#/knowledge", view: "knowledge-view", button: "knowledge-btn", refresh: () => refreshKnowledgePage() },
+};
+
+function showPage(name) {
   if (state.abortController) stopGeneration();
-  state.view = "memory";
-  document.querySelector(".main").classList.add("show-memory");
-  $("memory-view").hidden = false;
-  $("memory-btn").classList.add("active");
-  history.replaceState(null, "", "#/memory");
+  hidePages();
+  state.view = name;
+  const page = PAGES[name];
+  document.querySelector(".main").classList.add(`show-${name}`);
+  $(page.view).hidden = false;
+  $(page.button).classList.add("active");
+  history.replaceState(null, "", page.hash);
   state.activeId = null;
   refreshConversations(); // снять подсветку открытого диалога
   closeSidebar();
-  refreshMemoryPage();
+  page.refresh();
+}
+
+function hidePages() {
+  for (const [name, page] of Object.entries(PAGES)) {
+    document.querySelector(".main").classList.remove(`show-${name}`);
+    $(page.view).hidden = true;
+    $(page.button).classList.remove("active");
+  }
 }
 
 function showChatView() {
   if (state.view === "chat") return;
   state.view = "chat";
-  document.querySelector(".main").classList.remove("show-memory");
-  $("memory-view").hidden = true;
-  $("memory-btn").classList.remove("active");
+  hidePages();
+  refreshKnowledgeScope(); // могли добавить документы — обновим выбор базы знаний
 }
 
-$("memory-btn").addEventListener("click", showMemoryView);
+$("memory-btn").addEventListener("click", () => showPage("memory"));
+$("knowledge-btn").addEventListener("click", () => showPage("knowledge"));
+
+function pageFromHash() {
+  return Object.keys(PAGES).find((name) => PAGES[name].hash === location.hash) || null;
+}
 
 // Адрес поменяли вручную или кнопкой «Назад» — открываем нужное.
 // (Наши собственные переходы идут через history.replaceState и это событие не вызывают.)
 window.addEventListener("hashchange", () => {
   const id = idFromHash();
-  if (location.hash === "#/memory") showMemoryView();
+  const page = pageFromHash();
+  if (page) showPage(page);
   else if (id && id !== state.activeId) openConversation(id);
   else if (!location.hash) newChat();
 });
+
+// =====================================================================
+// База знаний: где искать ответы в этом диалоге
+// =====================================================================
+
+const kbScope = $("kb-scope");
+
+/** Варианты: вся база / одна коллекция / без базы. Строка видна, только если есть готовые документы. */
+function fillKnowledgeScope(overview) {
+  const ready = overview?.stats?.ready > 0;
+  $("kb-scope-row").hidden = !ready;
+  if (!ready) return;
+  const previous = kbScope.value || "all";
+  kbScope.innerHTML = "";
+  kbScope.append(new Option("Искать в базе знаний", "all"));
+  const withDocs = overview.collections.filter((c) => c.documents.some((d) => d.status === "ready"));
+  if (withDocs.length > 1) {
+    for (const c of withDocs) kbScope.append(new Option(`Только «${c.name}»`, String(c.id)));
+  }
+  kbScope.append(new Option("Без базы знаний", "off"));
+  setKnowledgeScope(previous);
+}
+
+function setKnowledgeScope(value) {
+  kbScope.value = [...kbScope.options].some((o) => o.value === value) ? value : "all";
+}
+
+async function refreshKnowledgeScope() {
+  fillKnowledgeScope(await api.knowledge().catch(() => null));
+}
+
+kbScope.addEventListener("change", async () => {
+  if (state.activeId) {
+    await api.updateConversation(state.activeId, { kb_scope: kbScope.value }).catch(() => {});
+  }
+});
+
+initKnowledgePage({ onChanged: fillKnowledgeScope });
 initMemoryPage({ onChanged: loadMemoryCache });
 
 // Адрес вида #/c/<id> — чтобы после обновления страницы открылся тот же диалог
@@ -297,7 +359,7 @@ async function sendMessage(text) {
   // Новый диалог создаём на сервере только при первом сообщении
   if (!state.activeId) {
     try {
-      const conv = await api.createConversation({ model, persona_id: selectedPersonaId() });
+      const conv = await api.createConversation({ model, persona_id: selectedPersonaId(), kb_scope: kbScope.value || "all" });
       state.activeId = conv.id;
       setHash(conv.id);
     } catch (e) {
@@ -344,6 +406,7 @@ async function streamAnswer(startRequest) {
   let started = false;
   let released = false;
   let memoryFacts = null;
+  let sources = null; // фрагменты базы знаний для ссылок [1], [2]
 
   // Ответ готов → поле ввода снова доступно. Поток при этом ещё открыт:
   // сервер может прислать событие memory («Запомнил: …») через пару секунд.
@@ -362,16 +425,19 @@ async function streamAnswer(startRequest) {
       started = true;
       bubble.startStreaming();
     }
-    if (event === "start") memoryFacts = data.memory?.facts || [];
+    if (event === "start") {
+      memoryFacts = data.memory?.facts || [];
+      sources = data.knowledge?.sources || [];
+    }
     else if (event === "thinking") bubble.appendThinking(data.text);
     else if (event === "token") bubble.appendContent(data.text);
     else if (event === "done") {
       finished = true;
-      bubble.finish({ message: data.message, memoryFacts });
+      bubble.finish({ message: data.message, memoryFacts, sources });
       release();
     } else if (event === "error") {
       finished = true;
-      bubble.finish({ message: data.partial, error: data.message, memoryFacts });
+      bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources });
       release();
     } else if (event === "memory") {
       bubble.showMemoryEvents(data.events, undoMemoryEvent);
@@ -385,8 +451,8 @@ async function streamAnswer(startRequest) {
   } catch (e) {
     if (finished) {
       /* ответ уже показан — обрыв во время ожидания памяти не страшен */
-    } else if (e.name === "AbortError") bubble.finish({ stopped: true, memoryFacts });
-    else bubble.finish({ error: e.message, memoryFacts });
+    } else if (e.name === "AbortError") bubble.finish({ stopped: true, memoryFacts, sources });
+    else bubble.finish({ error: e.message, memoryFacts, sources });
   } finally {
     release();
   }
@@ -503,6 +569,8 @@ function applyAssistantName(name) {
   document.title = name;
   $("assistant-name").textContent = name;
   $("greeting").textContent = `${name} на связи. Чем помочь?`;
+  $("knowledge-sub").textContent =
+    `Документы, по которым ${name} отвечает со ссылками на источник. Всё хранится и обрабатывается на этом компьютере.`;
   $("memory-sub").textContent =
     `Что ${name} знает о вас. Подходящие факты подставляются в ответы. Всё хранится только на этом компьютере.`;
 }
@@ -519,7 +587,7 @@ function escapeHtml(s) {
 
 async function init() {
   const ok = await checkHealth();
-  await Promise.all([loadModels(), loadPersonas(), loadMemoryCache()]);
+  await Promise.all([loadModels(), loadPersonas(), loadMemoryCache(), refreshKnowledgeScope()]);
   await refreshConversations();
 
   initSettings({
@@ -536,7 +604,8 @@ async function init() {
   });
 
   const id = idFromHash();
-  if (location.hash === "#/memory") showMemoryView();
+  const page = pageFromHash();
+  if (page) showPage(page);
   else if (id) await openConversation(id);
   else input.focus();
 

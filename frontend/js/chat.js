@@ -3,6 +3,7 @@
 // =====================================================================
 
 import { copyText, enhanceCodeBlocks, renderMarkdown } from "./markdown.js";
+import { openSource } from "./knowledge.js";
 import { describeEvent, plural } from "./memory.js";
 
 const messagesEl = () => document.getElementById("messages");
@@ -151,8 +152,9 @@ export function createAssistantMessage({ onRetry } = {}) {
     /**
      * Генерация закончена (успешно, остановлена или с ошибкой).
      * memoryFacts — факты из памяти, которые были в контексте (из события start).
+     * sources — фрагменты базы знаний, на которые модель может ссылаться [1], [2].
      */
-    finish({ message, stopped = false, error = null, memoryFacts = null } = {}) {
+    finish({ message, stopped = false, error = null, memoryFacts = null, sources = null } = {}) {
       msg.classList.remove("streaming", "streaming-wait");
       if (message) {
         content = message.content ?? content;
@@ -160,6 +162,11 @@ export function createAssistantMessage({ onRetry } = {}) {
       }
       contentEl.innerHTML = renderMarkdown(content);
       enhanceCodeBlocks(contentEl, { highlight: true });
+      const srcList = sources ?? message?.extras?.sources ?? [];
+      if (srcList.length) {
+        linkifyCitations(contentEl, srcList);
+        renderSources(msg, metaEl, srcList);
+      }
       if (thinking) {
         thinkingEl.hidden = false;
         thinkingEl.open = false;
@@ -212,6 +219,65 @@ export function createAssistantMessage({ onRetry } = {}) {
       for (const ev of events) box.append(memoryNote(ev, onUndo));
     },
   };
+}
+
+/**
+ * Превращает «[1]» в тексте ответа в кнопки, открывающие источник.
+ * Меняем только текстовые узлы и не трогаем код: в коде [1] — это индекс массива.
+ * Номера, которых нет среди источников (модель выдумала), остаются обычным текстом.
+ */
+function linkifyCitations(container, sources) {
+  const byNumber = new Map(sources.map((s) => [s.n, s]));
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => (node.parentElement.closest("code, pre, .cite") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  const nodes = [];
+  while (walker.nextNode()) if (/\[\d+\]/.test(walker.currentNode.nodeValue)) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const fragment = document.createDocumentFragment();
+    let last = 0;
+    for (const m of node.nodeValue.matchAll(/\[(\d+)\]/g)) {
+      const source = byNumber.get(Number(m[1]));
+      if (!source) continue;
+      fragment.append(node.nodeValue.slice(last, m.index));
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cite";
+      btn.textContent = m[1];
+      btn.title = source.label;
+      btn.addEventListener("click", () => openSource(source));
+      fragment.append(btn);
+      last = m.index + m[0].length;
+    }
+    if (last === 0) continue;
+    fragment.append(node.nodeValue.slice(last));
+    node.replaceWith(fragment);
+  }
+}
+
+/** Под ответом: «Источники: [1] Лекция 3, стр. 5 · [2] Замыкания.md › Примеры». */
+function renderSources(msg, metaEl, sources) {
+  msg.querySelector(".sources")?.remove();
+  const box = document.createElement("div");
+  box.className = "sources";
+  const label = document.createElement("span");
+  label.className = "sources-label";
+  label.textContent = "Источники:";
+  box.append(label);
+  for (const s of sources) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "source-chip";
+    chip.title = s.label;
+    const n = document.createElement("b");
+    n.textContent = s.n;
+    const text = document.createElement("span");
+    text.textContent = s.label;
+    chip.append(n, text);
+    chip.addEventListener("click", () => openSource(s));
+    box.append(chip);
+  }
+  metaEl.before(box);
 }
 
 const NOTE_ICONS = { add: "💾", update: "✏️", delete: "🗑️" };

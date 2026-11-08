@@ -13,6 +13,9 @@ const ICONS = {
 };
 
 let data = null; // последний ответ GET /api/memory
+// Сколько сохранений настроек ещё в пути. Пока они не завершились, обновление страницы
+// не трогает переключатели — иначе ответ со старыми данными «откатил» бы быстрый второй клик.
+let pendingSaves = 0;
 let searchTimer = null;
 let onChange = () => {};
 
@@ -63,7 +66,12 @@ export function initMemoryPage({ onChanged } = {}) {
     $(id).addEventListener("change", async (e) => {
       // Доступность «Запоминать автоматически» меняем сразу, не дожидаясь ответа сервера
       $("mem-autosave").disabled = !$("mem-enabled").checked;
-      await api.updateSettings({ [key]: e.target.checked });
+      pendingSaves++;
+      try {
+        await api.updateSettings({ [key]: e.target.checked });
+      } finally {
+        pendingSaves--;
+      }
       await refreshMemoryPage();
     });
   }
@@ -105,9 +113,11 @@ export async function refreshMemoryPage() {
     for (const c of data.categories) catSelect.append(new Option(c, c));
     catSelect.value = "другое";
   }
-  $("mem-enabled").checked = data.settings.memory_enabled;
-  $("mem-autosave").checked = data.settings.memory_autosave;
-  $("mem-autosave").disabled = !data.settings.memory_enabled;
+  if (pendingSaves === 0) {
+    $("mem-enabled").checked = data.settings.memory_enabled;
+    $("mem-autosave").checked = data.settings.memory_autosave;
+    $("mem-autosave").disabled = !data.settings.memory_enabled;
+  }
   setBudgetSelect(data.settings.memory_budget_tokens);
   renderStats();
   renderList();

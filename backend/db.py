@@ -118,6 +118,60 @@ MIGRATIONS: list[str] = [
     -- позже — какие документы использовались (этап 4)
     ALTER TABLE messages ADD COLUMN extras TEXT;
     """,
+    # --- Миграция 4 (этап 4): база знаний (RAG) ---
+    """
+    -- Коллекции: «Мои файлы» (загруженные), «Obsidian» (подключённая папка) и т.п.
+    CREATE TABLE kb_collections (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        kind        TEXT NOT NULL CHECK (kind IN ('upload', 'folder')),
+        path        TEXT,                 -- для папки: путь на диске
+        synced_at   TEXT,
+        created_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE kb_documents (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        collection_id  INTEGER NOT NULL REFERENCES kb_collections(id) ON DELETE CASCADE,
+        title          TEXT NOT NULL,
+        rel_path       TEXT NOT NULL,     -- имя файла или путь внутри папки
+        file_path      TEXT NOT NULL,     -- где лежит оригинал (для «Открыть документ»)
+        file_type      TEXT NOT NULL,     -- pdf | docx | txt | md
+        size_bytes     INTEGER NOT NULL DEFAULT 0,
+        mtime          REAL,              -- время изменения файла — чтобы синхронизация видела правки
+        sha256         TEXT,
+        status         TEXT NOT NULL DEFAULT 'pending'
+                       CHECK (status IN ('pending', 'indexing', 'ready', 'error')),
+        error          TEXT,
+        progress       INTEGER NOT NULL DEFAULT 0,   -- сколько фрагментов уже обработано
+        chunk_count    INTEGER NOT NULL DEFAULT 0,
+        page_count     INTEGER,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL,
+        UNIQUE (collection_id, rel_path)
+    );
+
+    -- Фрагменты документов. Вектор смысла — float32, нормированный (длина 1),
+    -- поэтому близость считается простым скалярным произведением.
+    CREATE TABLE kb_chunks (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id      INTEGER NOT NULL REFERENCES kb_documents(id) ON DELETE CASCADE,
+        ord              INTEGER NOT NULL,      -- номер фрагмента в документе
+        text             TEXT NOT NULL,
+        section          TEXT,                  -- «Глава 2 › Замыкания»
+        page_start       INTEGER,
+        page_end         INTEGER,
+        embedding        BLOB,
+        embedding_model  TEXT
+    );
+    CREATE INDEX idx_kb_chunks_doc ON kb_chunks(document_id, ord);
+
+    -- Полнотекстовый индекс SQLite (FTS5) для поиска по словам. rowid = id фрагмента.
+    CREATE VIRTUAL TABLE kb_fts USING fts5(text, tokenize = 'unicode61 remove_diacritics 2');
+
+    -- Какую часть базы знаний использовать в диалоге: all | off | <id коллекции>
+    ALTER TABLE conversations ADD COLUMN kb_scope TEXT NOT NULL DEFAULT 'all';
+    """,
 ]
 
 
