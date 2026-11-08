@@ -7,6 +7,7 @@ import { isSpeaking, speak, stopSpeaking } from "./speech.js";
 import { copyText, enhanceCodeBlocks, renderMarkdown } from "./markdown.js";
 import { openSource } from "./knowledge.js";
 import { describeEvent, plural } from "./memory.js";
+import { describeFile, fileIcon, formatSize } from "./attachments.js";
 
 const messagesEl = () => document.getElementById("messages");
 
@@ -29,6 +30,8 @@ const ICONS = {
   dislike: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3Zm0 0-4 8a3 3 0 0 1-3-3v-4H4.5a2 2 0 0 1-2-2.3l1.4-8A2 2 0 0 1 5.9 3H17"/></svg>',
   edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
   speak: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>',
+  word: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/><path d="m8.5 12 1.2 5 1.8-4 1.8 4 1.2-5"/></svg>',
+  download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
 };
 
 /** Прокручен ли чат почти до конца? Если пользователь листает вверх — не дёргаем его. */
@@ -53,10 +56,27 @@ function hideEmptyState() {
   document.getElementById("empty-state").hidden = true;
 }
 
-export function addUserMessage(text) {
+/** Ссылка-«чип» на файл: иконка, имя, размер. Клик — скачать. */
+function fileChip(file) {
+  const a = el("a", "file-chip");
+  a.href = file.url;
+  a.download = file.name;
+  a.title = `Скачать «${file.name}»`;
+  const text = el("span", "f-text");
+  text.append(el("span", "f-name", file.name), el("span", "f-info", describeFile(file)));
+  a.append(el("span", "f-icon", fileIcon(file.name)), text);
+  return a;
+}
+
+export function addUserMessage(text, attachments = []) {
   hideEmptyState();
   const msg = document.createElement("div");
   msg.className = "msg msg-user";
+  if (attachments.length) {
+    const files = el("div", "msg-files");
+    for (const f of attachments) files.append(fileChip(f));
+    msg.append(files);
+  }
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   bubble.textContent = text; // textContent, а не innerHTML — текст пользователя не исполняется как HTML
@@ -95,6 +115,7 @@ export function createAssistantMessage({ onRetry } = {}) {
       <button class="icon-btn btn-copy" type="button" title="Копировать ответ">${ICONS.copy}</button>
       <button class="icon-btn btn-retry" type="button" title="Ответить заново" hidden>${ICONS.retry}</button>
       <button class="icon-btn btn-speak" type="button" title="Прочитать вслух">${ICONS.speak}</button>
+      <a class="icon-btn btn-word" title="Скачать ответ как документ Word" hidden>${ICONS.word}</a>
       <span class="feedback" hidden>
         <button class="icon-btn btn-like" type="button" title="Хороший ответ — сохранить в датасет для обучения" aria-pressed="false">${ICONS.like}</button>
         <button class="icon-btn btn-dislike" type="button" title="Плохой ответ" aria-pressed="false">${ICONS.dislike}</button>
@@ -283,7 +304,7 @@ export function createAssistantMessage({ onRetry } = {}) {
      * memoryFacts — факты из памяти, которые были в контексте (из события start).
      * sources — фрагменты базы знаний, на которые модель может ссылаться [1], [2].
      */
-    finish({ message, stopped = false, error = null, memoryFacts = null, sources = null } = {}) {
+    finish({ message, stopped = false, error = null, memoryFacts = null, sources = null, files = null } = {}) {
       msg.classList.remove("streaming", "streaming-wait");
       for (const card of toolCards.values()) card.cancel(); // незавершённые инструменты — «остановлено»
       if (message) {
@@ -321,6 +342,16 @@ export function createAssistantMessage({ onRetry } = {}) {
         mem.title = "Учтено из памяти:\n" + facts.map((f) => `• ${f.content}`).join("\n");
         metaSpan.append(meta ? " · " : "", mem);
       }
+      // «📎 2 файла» — какие файлы диалога модель прочитала; при наведении — целиком или выдержками
+      const usedFiles = files ?? message?.extras?.files ?? [];
+      if (usedFiles.length) {
+        const tag = document.createElement("span");
+        tag.className = "meta-files";
+        tag.textContent = `📎 ${plural(usedFiles.length, "файл", "файла", "файлов")}`;
+        tag.title = "Модель прочитала:\n" + usedFiles.map((f) => `• ${f.name} — ${f.full ? "целиком"
+          : `выдержки: ${f.used} из ${f.total} фрагментов`}`).join("\n");
+        metaSpan.append(metaSpan.childNodes.length ? " · " : "", tag);
+      }
       metaEl.hidden = !(content || meta);
 
       if (error) {
@@ -334,6 +365,10 @@ export function createAssistantMessage({ onRetry } = {}) {
         messageId = message.id;
         feedbackEl.hidden = false;
         updateFeedbackUI();
+        const word = msg.querySelector(".btn-word");
+        word.href = `/api/files/from-message/${message.id}`;
+        word.setAttribute("download", "");
+        word.hidden = false;
       }
       scrollToBottom();
     },
@@ -358,6 +393,7 @@ export function createAssistantMessage({ onRetry } = {}) {
     },
 
     toolResult(entry) {
+      const stick = isNearBottom(); // проверяем ДО вставки: карточка документа высокая
       let card = toolCards.get(entry.id);
       if (!card) {
         card = createToolCard(entry);
@@ -365,6 +401,7 @@ export function createAssistantMessage({ onRetry } = {}) {
         toolsEl.append(card.element);
       }
       card.setResult(entry);
+      if (stick) scrollToBottom(true);
     },
 
     /** Под ответом: «💾 Запомнил: «…» · Отменить». onUndo(event) возвращает обновлённое событие. */
@@ -545,6 +582,11 @@ function createToolCard(entry) {
         summary.textContent = `${e.display.expression} = ${e.display.result}`;
         return;
       }
+      if (e.status === "ok" && e.display?.file) {
+        card.classList.add("has-file");
+        card.append(fileCard(e.display.file, e.display.changes));
+        return;
+      }
       const body = renderToolBody(e);
       if (!body) return;
       const details = el("details", "tool-body");
@@ -553,6 +595,105 @@ function createToolCard(entry) {
       card.append(details);
     },
   };
+}
+
+// =====================================================================
+// Карточка созданного документа: имя, «Скачать», предпросмотр
+// =====================================================================
+
+function fileCard(file, changes) {
+  const box = el("div", "doc-card");
+  const row = el("div", "doc-row");
+  const info = el("div", "doc-info");
+  info.append(el("span", "doc-name", file.name), el("span", "doc-meta", docMeta(file)));
+  const download = el("a", "btn btn-primary doc-download");
+  download.href = file.url;
+  download.download = file.name;
+  download.innerHTML = ICONS.download;
+  download.append(" Скачать");
+  row.append(el("span", "doc-icon", fileIcon(file.name)), info, download);
+  box.append(row);
+
+  const preview = buildPreview(file, changes);
+  if (preview) {
+    const details = el("details", "doc-preview");
+    details.append(el("summary", "", changes ? "Что изменено" : "Предпросмотр"), preview);
+    // Небольшой документ раскрываем сразу — видно, что получилось, без лишнего клика
+    details.open = Boolean(changes) || (file.meta?.type === "docx" && (file.meta?.words || 0) < 400);
+    box.append(details);
+  }
+  return box;
+}
+
+function docMeta(file) {
+  const m = file.meta || {};
+  const parts = [{ docx: "Документ Word", pptx: "Презентация PowerPoint", xlsx: "Таблица Excel" }[m.type] || "Файл"];
+  if (m.words) parts.push(plural(m.words, "слово", "слова", "слов"));
+  if (m.slides) parts.push(plural(m.slides, "слайд", "слайда", "слайдов"));
+  if (m.sheets?.length) parts.push(plural(m.sheets.length, "лист", "листа", "листов"));
+  if (m.edited_from) parts.push(`исправленная копия «${m.edited_from}»`);
+  parts.push(formatSize(file.size));
+  return parts.join(" · ");
+}
+
+function buildPreview(file, changes) {
+  const p = file.meta?.preview;
+  if (changes) {
+    const ul = el("ul", "doc-changes");
+    for (const c of changes) {
+      const li = el("li", c.count ? "" : "missed");
+      li.append(el("del", "", c.find), " → ", el("ins", "", c.replace),
+        el("span", "t-label", c.count ? ` ×${c.count}` : " — не найдено"));
+      ul.append(li);
+    }
+    return ul;
+  }
+  if (!p) return null;
+  if (file.meta.type === "docx") {
+    const page = el("div", "doc-page");
+    // renderMarkdown пропускает HTML через DOMPurify — текст от модели безопасно показывать
+    page.innerHTML = renderMarkdown((p.title && !/^\s*#/.test(p.markdown) ? `# ${p.title}\n\n` : "") + p.markdown);
+    enhanceCodeBlocks(page, { highlight: true });
+    return page;
+  }
+  if (file.meta.type === "pptx") {
+    const grid = el("div", "slides-grid");
+    const title = el("div", "slide-thumb is-title");
+    title.append(el("b", "", p.title || ""), el("span", "", p.subtitle || ""));
+    grid.append(title);
+    p.slides.forEach((s, i) => {
+      const thumb = el("div", "slide-thumb");
+      thumb.append(el("b", "", s.title));
+      const ul = el("ul");
+      for (const [level, text] of s.points) ul.append(el("li", level ? "sub" : "", text));
+      thumb.append(ul, el("span", "slide-num", String(i + 2)));
+      if (s.notes) thumb.title = `Заметки: ${s.notes}`;
+      grid.append(thumb);
+    });
+    return grid;
+  }
+  if (file.meta.type === "xlsx") {
+    const wrap = el("div", "sheet-preview");
+    for (const sheet of p.sheets) {
+      wrap.append(el("div", "t-label", `Лист «${sheet.name}»` + (sheet.total > sheet.rows.length ? ` · первые ${sheet.rows.length} из ${sheet.total} строк` : "")));
+      const table = el("table");
+      if (sheet.columns.length) {
+        const tr = el("tr");
+        for (const c of sheet.columns) tr.append(el("th", "", c));
+        table.append(tr);
+      }
+      for (const row of sheet.rows) {
+        const tr = el("tr");
+        for (const v of row) tr.append(el("td", typeof v === "number" ? "num" : "", v ?? ""));
+        table.append(tr);
+      }
+      const scroller = el("div", "sheet-scroll");
+      scroller.append(table);
+      wrap.append(scroller);
+    }
+    return wrap;
+  }
+  return null;
 }
 
 /** Содержимое карточки после выполнения — своё для каждого инструмента. */
@@ -664,7 +805,7 @@ export function renderHistory(messages, { onRetry, memoryEvents = [], onUndoMemo
   let lastAssistant = null;
   for (const m of messages) {
     if (m.role === "user") {
-      addUserMessage(m.content);
+      addUserMessage(m.content, m.extras?.attachments || []);
     } else if (m.role === "assistant") {
       lastAssistant = createAssistantMessage({ onRetry });
       for (const entry of m.extras?.tools || []) lastAssistant.toolResult(entry); // карточки инструментов

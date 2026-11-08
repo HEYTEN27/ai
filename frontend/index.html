@@ -364,7 +364,12 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
             <select id="kb-scope" aria-label="База знаний"></select>
           </label>
         </div>
+        <div class="attach-list" id="attach-list" hidden></div>
         <div class="composer-box">
+          <button class="icon-btn attach-btn" id="attach-btn" type="button" title="Прикрепить файл: PDF, Word, Excel, PowerPoint, текст, код" aria-label="Прикрепить файл">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.4 11.6-8.9 8.9a5.5 5.5 0 0 1-7.8-7.8l8.9-8.9a3.7 3.7 0 0 1 5.2 5.2l-8.9 8.9a1.8 1.8 0 0 1-2.6-2.6l8.2-8.2"/></svg>
+          </button>
+          <input type="file" id="attach-input" multiple hidden>
           <textarea id="input" rows="1" placeholder="Напишите сообщение…" aria-label="Сообщение"></textarea>
           <span class="mic-timer" id="mic-timer" hidden>0:00</span>
           <button class="icon-btn mic-btn" id="mic-btn" type="button" title="Голосовой ввод (распознаётся на этом компьютере)" aria-label="Голосовой ввод" hidden>
@@ -376,8 +381,11 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
             <svg class="icon-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
           </button>
         </div>
-        <p class="composer-hint">Enter — отправить · Shift+Enter — новая строка</p>
+        <p class="composer-hint">Enter — отправить · Shift+Enter — новая строка<span class="hint-drop"> · файлы можно перетащить в окно</span></p>
       </form>
+      <div class="drop-overlay" id="drop-overlay" hidden>
+        <div class="drop-box">📎 Отпустите, чтобы прикрепить файлы<small>PDF, Word, Excel, PowerPoint, текст, код — до 25 МБ</small></div>
+      </div>
     </main>
   </div>
 
@@ -688,6 +696,13 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
           <span class="spacer"></span>
         </div>
         <label class="check"><input type="checkbox" id="t-confirm-python"> Спрашивать перед запуском кода</label>
+      </div>
+
+      <div class="tool-setting">
+        <label class="toggle"><input type="checkbox" id="t-documents"><span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">📝 Документы: Word, PowerPoint, Excel</span></label>
+        <p class="hint">Джарвис создаёт .docx, .pptx и .xlsx и правит прикреплённые документы Word (исправленная копия,
+          оригинал не меняется). Файлы сохраняются только внутри приложения — скачиваете их вы сами кнопкой в чате.</p>
       </div>
 
       <p class="form-error" id="tools-error" hidden></p>

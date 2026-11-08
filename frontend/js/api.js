@@ -156,6 +156,16 @@ export const api = {
   updateExample: (id, data) => request("PATCH", `/api/dataset/${id}`, data),
   deleteExample: (id) => request("DELETE", `/api/dataset/${id}`),
 
+  /** Вложение в чат: файл уходит на сервер сразу, текст из него извлекается там же. */
+  async uploadAttachment(file) {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch("/api/files", { method: "POST", body: form });
+    if (!response.ok) throw new Error(await errorText(response));
+    return response.json();
+  },
+  deleteFile: (id) => request("DELETE", `/api/files/${id}`),
+
   sendMessage: (id, body, onEvent, signal) =>
     streamSSE(`/api/conversations/${id}/messages`, body, onEvent, signal),
   regenerate: (id, body, onEvent, signal) =>

@@ -14,6 +14,7 @@ const TOGGLES = {
   "t-web": "tool_web",
   "t-files": "tool_files",
   "t-python": "tool_python",
+  "t-documents": "tool_documents",
   "t-confirm-web": "confirm_web",
   "t-confirm-python": "confirm_python",
 };

@@ -196,6 +196,23 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_dataset_rating ON dataset_examples(rating);
     """,
+    # --- Миграция 6 (этап 9): файлы — вложения в чате и созданные документы ---
+    """
+    -- Сам файл лежит на диске: data/files/<id>/<имя>. Здесь — описание и извлечённый текст.
+    CREATE TABLE files (
+        id               TEXT PRIMARY KEY,            -- случайный id (он же папка на диске)
+        conversation_id  TEXT REFERENCES conversations(id) ON DELETE CASCADE,
+        message_id       INTEGER REFERENCES messages(id) ON DELETE SET NULL,  -- к какому сообщению
+        kind             TEXT NOT NULL CHECK (kind IN ('upload', 'generated')),  -- загружен / создан Джарвисом
+        name             TEXT NOT NULL,               -- имя для показа и скачивания
+        mime             TEXT NOT NULL,
+        size             INTEGER NOT NULL,            -- байт
+        text             TEXT,                        -- извлечённый текст (для вложений)
+        meta             TEXT,                        -- JSON: страницы, листы, слайды, предпросмотр
+        created_at       TEXT NOT NULL
+    );
+    CREATE INDEX idx_files_conversation ON files(conversation_id);
+    """,
 ]
 
 

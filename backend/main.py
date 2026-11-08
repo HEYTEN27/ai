@@ -24,6 +24,8 @@ from .memory.router import router as memory_router
 from .tools.router import router as tools_router
 from .training.router import router as training_router
 from .export.router import router as export_router
+from .files import store as files_store
+from .files.router import router as files_router
 from .voice.router import router as voice_router
 from .settings.personas import ensure_builtin as ensure_builtin_personas
 from .settings.router import router as settings_router
@@ -36,6 +38,7 @@ async def lifespan(app: FastAPI):
     init_db()
     ensure_builtin_personas()  # учитель, программист, редактор... — если их ещё нет в базе
     indexer.start()  # фоновая очередь индексации документов базы знаний
+    files_store.cleanup()  # брошенные вложения и файлы удалённых диалогов
     yield
     # --- при остановке сервера ---
     await indexer.stop()
@@ -54,6 +57,7 @@ app.include_router(dataset_router)
 app.include_router(training_router)
 app.include_router(voice_router)
 app.include_router(export_router)
+app.include_router(files_router)
 
 # Статика монтируется ПОСЛЕДНЕЙ: всё, что не /api/..., отдаётся как файлы интерфейса.
 # html=True — по адресу "/" отдаётся index.html.

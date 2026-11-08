@@ -306,6 +306,23 @@ body[data-core="speaking"] .tts-toggle { color: var(--accent); box-shadow: var(-
 @keyframes boot-in { from { transform: scale(.4) rotate(-90deg); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes line-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
 
+/* ---------- вложения и документы (этап 9) ---------- */
+
+[data-theme="hud"] :is(.attach-chip, .file-chip) {
+  border-radius: 3px; background: var(--panel); border-color: rgba(63, 217, 255, .28);
+}
+[data-theme="hud"] .file-chip:hover { border-color: rgba(63, 217, 255, .6); box-shadow: var(--glow); }
+[data-theme="hud"] :is(.a-name, .f-name, .doc-name) { font-family: var(--font-hud); letter-spacing: .02em; }
+[data-theme="hud"] .attach-btn:hover { color: var(--accent); }
+[data-theme="hud"] .drop-overlay { background: rgba(2, 7, 15, .78); }
+[data-theme="hud"] .drop-box {
+  border-radius: 3px; border-color: var(--accent); font-family: var(--font-hud); letter-spacing: .06em;
+  box-shadow: var(--glow), inset 0 0 30px rgba(63, 217, 255, .12); text-shadow: 0 0 10px rgba(63, 217, 255, .5);
+}
+[data-theme="hud"] :is(.doc-card, .doc-preview) { border-top-color: rgba(63, 217, 255, .16); }
+[data-theme="hud"] .doc-download { border-radius: 3px; }
+[data-theme="hud"] .doc-page, [data-theme="hud"] .slide-thumb { border-radius: 2px; }
+
 /* ---------- узкие экраны и «меньше анимаций» ---------- */
 
 @media (max-width: 768px) {

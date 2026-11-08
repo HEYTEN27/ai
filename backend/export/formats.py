@@ -42,6 +42,8 @@ def _tool_line(t: dict) -> str:
     result = ""
     if t.get("name") == "calculator" and t.get("status") == "ok":
         result = f" = {t['display']['result']}"
+    if (t.get("display") or {}).get("file") and t.get("status") == "ok":
+        result = f" → файл «{t['display']['file']['name']}»"  # созданный документ (этап 9)
     return f"- {t.get('icon', '🛠')} {t.get('title', t.get('name'))}: `{t.get('summary', '')}`{result}{status}"
 
 
@@ -56,7 +58,11 @@ def to_markdown(conv: dict, messages: list[dict]) -> str:
 
     for m in messages:
         if m["role"] == "user":
-            lines += ["---", "", f"### 🧑 Вы · {_local(m['created_at']):%H:%M}", "", m["content"], ""]
+            lines += ["---", "", f"### 🧑 Вы · {_local(m['created_at']):%H:%M}", ""]
+            attached = (m.get("extras") or {}).get("attachments") or []
+            if attached:
+                lines += [f"📎 Вложения: {', '.join(a['name'] for a in attached)}", ""]
+            lines += [m["content"], ""]
             continue
         if m["role"] != "assistant":
             continue

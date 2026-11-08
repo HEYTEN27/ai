@@ -77,6 +77,7 @@ def defaults() -> dict:
         "tool_web": True,  # поиск и чтение страниц — единственное, что выходит в интернет
         "tool_files": True,  # работает, только когда выбрана папка files_root
         "tool_python": True,
+        "tool_documents": True,  # создание Word, PowerPoint, Excel (файлы остаются внутри приложения)
         "files_root": "",  # папка, из которой модели можно читать файлы (с подтверждением)
         "python_timeout": 10,  # секунд на выполнение кода
         "confirm_python": True,  # спрашивать перед запуском кода
@@ -133,7 +134,7 @@ def _validate(key: str, value):
         if not 0 <= value <= 16:
             raise SettingsError("Занято другими программами: от 0 до 16 ГиБ")
     elif key in ("memory_enabled", "memory_autosave", "embedding_on_gpu", "tools_enabled", "tool_calculator",
-                 "tool_web", "tool_files", "tool_python", "confirm_python", "confirm_web", "voice_enabled",
+                 "tool_web", "tool_files", "tool_python", "tool_documents", "confirm_python", "confirm_web", "voice_enabled",
                  "tts_enabled", "ui_sounds"):
         if not isinstance(value, bool):
             raise SettingsError("Ожидается да/нет (true/false)")

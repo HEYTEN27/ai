@@ -116,6 +116,23 @@ def list_messages(conv_id: str) -> list[dict]:
     return result
 
 
+def get_message(message_id: int) -> dict | None:
+    """Одно сообщение (с исправлением из датасета, если есть)."""
+    with get_conn() as conn:
+        row = conn.execute(
+            """SELECT m.*, d.rating AS rating, d.corrected AS corrected
+               FROM messages m LEFT JOIN dataset_examples d ON d.message_id = m.id WHERE m.id = ?""",
+            (message_id,),
+        ).fetchone()
+    return _message_to_dict(row) if row else None
+
+
+def update_extras(message_id: int, extras: dict) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE messages SET extras = ? WHERE id = ?",
+                     (json.dumps(extras, ensure_ascii=False) if extras else None, message_id))
+
+
 def add_message(
     conv_id: str,
     role: str,

@@ -162,7 +162,13 @@ async def chat(request: Request):
 
     question = body["messages"][-1]["content"]
     thinking = _tokens("Пользователь спрашивает. Надо ответить коротко и по делу.") if body.get("think") else []
-    if "Фрагменты из базы знаний" in question:
+    if "=== Файл «" in question:
+        # Модель «прочитала» файлы: называем их и цитируем начало, чтобы тесты видели, что текст дошёл
+        names = re.findall(r"=== Файл «(.+?)» \((.+?)\) ===\n(.{0,60})", question)
+        real_q = question.rsplit("Вопрос пользователя:", 1)[-1].strip()
+        seen = "; ".join(f"«{n}» [{how}]: {start.strip()}" for n, how, start in names)
+        content = _tokens(f"Прочитал файлы: {seen}. Ответ на «{real_q[:60]}».")
+    elif "Фрагменты из базы знаний" in question:
         # Как настоящая модель с RAG: отвечает по фрагментам и ставит ссылки на источники
         n_sources = len(re.findall(r"^\[\d+\] ", question, re.MULTILINE))
         cites = " ".join(f"[{i}]" for i in range(1, n_sources + 1))
@@ -301,6 +307,26 @@ def _tool_call_for(question: str) -> list[dict]:
         return [{"name": "list_files", "arguments": {}}]
     if m := re.search(r"прочитай файл (\S+)", question, re.IGNORECASE):
         return [{"name": "read_file", "arguments": {"path": m.group(1).strip(".,!?")}}]
+    # --- документы (этап 9) ---
+    if "в word" in low or "документ word" in low:
+        topic = re.sub(r"(?i).*?(про|о|об)\s+", "", question.strip().splitlines()[0], count=1).strip(" .?!") or "тема"
+        return [{"name": "create_word_document", "arguments": {
+            "filename": f"Реферат {topic}", "content":
+                f"# Реферат: {topic}\n\n## Введение\n\nТекст про **{topic}**.\n\n- пункт один\n- пункт два\n\n"
+                "| Термин | Значение |\n|---|---|\n| A | B |\n"}}]
+    if "презентаци" in low:
+        return [{"name": "create_presentation", "arguments": {
+            "filename": "Презентация", "title": "Замыкания", "subtitle": "Лекция",
+            # как настоящая модель иногда делает — вложенный список приходит строкой JSON
+            "slides": json.dumps([{"title": "Что это", "points": ["Функция + окружение", "  подпункт"], "notes": "Скажи про scope"},
+                                  {"title": "Итог", "points": ["Используйте let"]}], ensure_ascii=False)}}]
+    if "таблицу excel" in low or "в excel" in low:
+        return [{"name": "create_spreadsheet", "arguments": {"filename": "Бюджет", "sheets": [
+            {"name": "Бюджет", "columns": ["Статья", "Сумма"],
+             "rows": [["Еда", "12 500"], ["Транспорт", 3000], ["Итого", "=СУММ(B2:B3)"]]}]}}]
+    if m := re.search(r"замени «(.+?)» на «(.+?)»(?: в (\S+))?", question, re.IGNORECASE):
+        return [{"name": "edit_word_document", "arguments": {
+            "file": (m.group(3) or "").strip(".,!?"), "replacements": [{"find": m.group(1), "replace": m.group(2)}]}}]
     if "запусти код" in low and (m := re.search(r"```(?:python)?\n(.*?)```", question, re.DOTALL)):
         return [{"name": "run_python", "arguments": {"code": m.group(1)}}]
     return []
@@ -311,6 +337,8 @@ def _tool_behaviour(body: dict):
     messages = body["messages"]
     offered = {t["function"]["name"] for t in body.get("tools") or []}
     last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+    # Вопрос мог прийти с фрагментами базы знаний или файлами — команды ищем только в самом вопросе
+    last_user = last_user.rsplit("Вопрос пользователя:", 1)[-1]
     tool_results = [m for m in messages if m["role"] == "tool"]
 
     calls = []

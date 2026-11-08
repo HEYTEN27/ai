@@ -20,6 +20,7 @@ import {
 import { initDatasetPage, refreshDatasetPage } from "./dataset.js";
 import { initTrainingPage, refreshTrainingPage } from "./training.js";
 import { initVoice } from "./voice.js";
+import { hasAttachments, initAttachments, takeReady } from "./attachments.js";
 import { runBoot } from "./boot.js";
 import { applyTheme, currentTheme, initHud, renderGreeting, setCoreState, setIdentity, waitingText } from "./hud.js";
 import { play, setSoundsEnabled } from "./sounds.js";
@@ -364,9 +365,12 @@ function idFromHash() {
 // Отправка сообщения и потоковый ответ
 // =====================================================================
 
+// Если отправляют только файлы без текста — такой вопрос подставляем сами
+const FILES_ONLY_QUESTION = "Посмотри прикреплённые файлы и кратко расскажи, что в них.";
+
 async function sendMessage(text) {
   text = text.trim();
-  if (!text || state.abortController) return;
+  if ((!text && !hasAttachments()) || state.abortController) return;
   const model = selectedModel();
   if (!model) {
     renderBanner({ error: true, html: "Не выбрана модель. Скачайте её: <code>ollama pull qwen3:8b</code>" });
@@ -385,13 +389,24 @@ async function sendMessage(text) {
     }
   }
 
+  // Файлы могли ещё загружаться — дождёмся (обычно доли секунды)
+  sendBtn.disabled = true;
+  const attachments = await takeReady();
+  if (!text && !attachments.length) {
+    updateSendButton();
+    return; // все файлы с ошибкой — отправлять нечего
+  }
+  text = text || FILES_ONLY_QUESTION;
+
   input.value = "";
   autoResize();
   hideAllRetryButtons();
-  addUserMessage(text);
+  addUserMessage(text, attachments);
 
   await streamAnswer((onEvent, signal) =>
-    api.sendMessage(state.activeId, { content: text, model, think: thinkToggle.checked }, onEvent, signal),
+    api.sendMessage(state.activeId, {
+      content: text, model, think: thinkToggle.checked, attachments: attachments.map((a) => a.id),
+    }, onEvent, signal),
   );
 }
 
@@ -427,6 +442,7 @@ async function streamAnswer(startRequest) {
   let released = false;
   let memoryFacts = null;
   let sources = null; // фрагменты базы знаний для ссылок [1], [2]
+  let files = null; // какие файлы диалога модель прочитала (целиком или выдержками)
 
   // Ответ готов → поле ввода снова доступно. Поток при этом ещё открыт:
   // сервер может прислать событие memory («Запомнил: …») через пару секунд.
@@ -448,19 +464,20 @@ async function streamAnswer(startRequest) {
     if (event === "start") {
       memoryFacts = data.memory?.facts || [];
       sources = data.knowledge?.sources || [];
+      files = data.files || [];
     }
     else if (event === "thinking") bubble.appendThinking(data.text);
     else if (event === "token") bubble.appendContent(data.text);
     else if (event === "done") {
       finished = true;
-      bubble.finish({ message: data.message, memoryFacts, sources });
+      bubble.finish({ message: data.message, memoryFacts, sources, files });
       release();
       setCoreState("idle");
       play("done");
       if (data.message?.content) speak(data.message.content); // озвучка — если включена и есть голос
     } else if (event === "error") {
       finished = true;
-      bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources });
+      bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources, files });
       release();
       setCoreState("idle");
       play("error");
@@ -523,7 +540,7 @@ function setGenerating(on) {
 }
 
 function updateSendButton() {
-  sendBtn.disabled = !state.abortController && !input.value.trim();
+  sendBtn.disabled = !state.abortController && !input.value.trim() && !hasAttachments();
 }
 
 // =====================================================================
@@ -545,6 +562,8 @@ input.addEventListener("keydown", (e) => {
     if (!state.abortController) sendMessage(input.value);
   }
 });
+
+initAttachments({ onChange: updateSendButton });
 
 // Голосовой ввод: распознанный текст вставляем туда, где стоит курсор (не отправляем сразу —
 // распознавание иногда ошибается, пусть пользователь проверит)

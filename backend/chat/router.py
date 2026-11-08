@@ -33,6 +33,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..files import store as files_store
+from ..files.context import attachments_budget, augment_with_files, build_attachment_block
 from ..knowledge import store as kb_store
 from ..knowledge.search import augment_question, build_query, sources_for_message
 from ..knowledge.search import search as kb_search
@@ -53,6 +55,7 @@ router = APIRouter(prefix="/api/conversations", tags=["chat"])
 MAX_MESSAGE_CHARS = 100_000  # защита от случайной вставки гигантского текста
 MEMORY_WAIT_SECONDS = 90  # сколько ждать извлечения фактов, чтобы показать «Запомнил» в чате
 MAX_TOOL_CALLS = 6  # больше вызовов инструментов за один ответ не даём — защита от зацикливания
+MAX_ATTACHMENTS = 10  # файлов в одном сообщении
 
 # Ссылки на фоновые задачи извлечения памяти. Без них сборщик мусора Python
 # может удалить незавершённую задачу.
@@ -81,6 +84,7 @@ class MessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
     model: str | None = None  # если не указана — модель диалога или модель по умолчанию
     think: bool = False  # включить «размышления» (для Qwen3 и других думающих моделей)
+    attachments: list[str] = Field(default_factory=list, max_length=MAX_ATTACHMENTS)  # id загруженных файлов
 
 
 class RegenerateRequest(BaseModel):
@@ -158,6 +162,7 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
     facts: list[dict] = []  # факты из памяти, подставленные в контекст
     sources: list[dict] = []  # фрагменты из базы знаний (для ссылок [1], [2])
     tool_log: list[dict] = []  # какие инструменты вызывались — для карточек в чате
+    files_report: list[dict] = []  # какие файлы диалога ушли в контекст (целиком или выдержками)
 
     def save(stopped: bool, stats: dict | None = None) -> dict | None:
         if "message" in saved:
@@ -176,10 +181,16 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             extras["sources"] = sources
         if tool_log:
             extras["tools"] = tool_log
+        if files_report:
+            extras["files"] = files_report
         saved["message"] = repo.add_message(
             conv_id, "assistant", content, thinking=thinking, model=model, stats=stats,
             stopped=stopped, persona_id=persona["id"], extras=extras or None,
         )
+        # Документы, созданные инструментами, привязываем к этому ответу
+        created = [e["display"]["file"]["id"] for e in tool_log if (e.get("display") or {}).get("file")]
+        if created:
+            files_store.attach_to_message(created, conv_id, saved["message"]["id"])
         return saved["message"]
 
     try:
@@ -223,6 +234,14 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
                 # к модели; в базе вопрос остаётся как есть
                 history = history[:-1] + [{**history[-1], "content": augment_question(history[-1]["content"], chunks)}]
 
+        # Файлы диалога (вложения и созданные документы): целиком или выдержками по вопросу
+        context_files = files_store.files_for_context(conv_id)
+        if context_files and user_messages:
+            block, files_report = build_attachment_block(
+                context_files, user_messages[-1], attachments_budget(settings["num_ctx"]))
+            history = history[:-1] + [{**history[-1], "content": augment_with_files(
+                history[-1]["content"], block, has_kb=bool(sources))}]
+
         # Инструменты — только если модель умеет их вызывать (qwen3, llama3.1 умеют)
         tools = tool_registry.enabled_tools(settings) if (info is not None and info.supports_tools) else []
         tools_by_name = {t.name: t for t in tools}
@@ -241,6 +260,7 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             "memory": {"method": method, "facts": [{"id": f["id"], "content": f["content"]} for f in facts]},
             "knowledge": {"method": kb_method, "sources": sources},
             "tools": [t.name for t in tools],
+            "files": files_report,
         })
 
         # Цикл «модель → инструмент → модель». Обычно один проход: модель просто отвечает.
@@ -291,7 +311,8 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
 
                 started = time.monotonic()
                 if approved:
-                    status, result_text, display = await tool_registry.execute(call["name"], call["arguments"], settings)
+                    status, result_text, display = await tool_registry.execute(
+                        call["name"], call["arguments"], settings, {"conversation_id": conv_id})
                 else:
                     status, result_text, display = "declined", "Пользователь отклонил это действие.", {}
                 entry.update(status=status, display=display, duration=round(time.monotonic() - started, 2))
@@ -381,6 +402,7 @@ def update_conversation(conv_id: str, body: ConversationUpdate):
 def delete_conversation(conv_id: str):
     if not repo.delete_conversation(conv_id):
         raise HTTPException(status_code=404, detail="Диалог не найден")
+    files_store.cleanup()  # записи о файлах удалились каскадом — убираем и сами файлы с диска
 
 
 @router.post("/{conv_id}/messages")
@@ -390,12 +412,22 @@ async def send_message(conv_id: str, body: MessageCreate):
         raise HTTPException(status_code=422, detail="Пустое сообщение")
     model = body.model or conv["model"] or settings_store.get("default_model")
 
+    # Вложения проверяем до любых изменений в базе
+    try:
+        uploads = files_store.pending_uploads(body.attachments, conv_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
     # Первое сообщение задаёт название диалога
     is_first = not repo.list_messages(conv_id)
     title = _make_title(body.content) if is_first and conv["title"] == repo.DEFAULT_TITLE else None
     repo.update_conversation(conv_id, title=title, model=model)
 
-    repo.add_message(conv_id, "user", body.content)
+    extras = {"attachments": [{k: f[k] for k in ("id", "name", "size", "mime", "meta", "url")} for f in uploads]} \
+        if uploads else None
+    message = repo.add_message(conv_id, "user", body.content, extras=extras)
+    if uploads:
+        files_store.attach_to_message([f["id"] for f in uploads], conv_id, message["id"])
     return _stream_response(_generate_answer(conv_id, model, body.think))
 
 
