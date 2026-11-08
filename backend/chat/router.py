@@ -53,6 +53,9 @@ from ..settings import store as settings_store
 from . import repository as repo
 from .artifacts import ARTIFACTS_HINT, compact_history
 from .complexity import assess as assess_complexity
+from .styles import STYLES
+from .styles import hint as style_hint
+from ..projects import repository as projects_repo
 from .context import build_messages
 from .prompts import build_system_prompt, generation_options
 
@@ -80,6 +83,8 @@ class ConversationCreate(BaseModel):
     model: str | None = None
     persona_id: int | None = None  # не указана — персона по умолчанию из настроек
     kb_scope: str = "all"  # база знаний: all — вся, off — не использовать, "<id>" — одна коллекция
+    project_id: int | None = None  # чат в проекте (этап 15а)
+    style: str = "normal"  # стиль ответов: normal, concise, detailed, simple, formal
 
 
 class ConversationUpdate(BaseModel):
@@ -87,6 +92,18 @@ class ConversationUpdate(BaseModel):
     model: str | None = None
     persona_id: int | None = None
     kb_scope: str | None = None
+    project_id: int | None = None
+    style: str | None = None
+
+
+class EditBody(BaseModel):
+    content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
+    model: str | None = None
+    think: bool = False
+
+
+class BranchBody(BaseModel):
+    message_id: int
 
 
 class MessageCreate(BaseModel):
@@ -125,6 +142,16 @@ def _check_kb_scope(scope: str) -> None:
         return
     if not scope.isdigit() or kb_store.get_collection(int(scope)) is None:
         raise HTTPException(status_code=422, detail="Такой коллекции в базе знаний нет")
+
+
+def _check_project(project_id: int | None) -> None:
+    if project_id is not None and projects_repo.get_project(project_id) is None:
+        raise HTTPException(status_code=422, detail="Такого проекта нет")
+
+
+def _check_style(style: str | None) -> None:
+    if style is not None and style not in STYLES:
+        raise HTTPException(status_code=422, detail=f"Стиль: один из {', '.join(STYLES)}")
 
 
 def _check_persona(persona_id: int | None) -> None:
@@ -225,7 +252,11 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
 
         # Зрение (этап 14): картинки из последних сообщений. Если модель их не видит — на этот
         # ответ подключаем модель зрения из настроек (Ollama сама освободит под неё видеопамять)
-        recent_user_ids = [m["id"] for m in history if m["role"] == "user"][-3:]
+        recent_user_ids = []
+        for m in [m for m in history if m["role"] == "user"][-3:]:
+            recent_user_ids.append(m["id"])
+            if (m.get("extras") or {}).get("edited_from"):  # исправленный вопрос: вложения — у исходного
+                recent_user_ids.append(m["extras"]["edited_from"])
         vision_records = files_store.vision_inputs(conv_id, recent_user_ids)
         if vision_records:
             for record in vision_records:
@@ -274,6 +305,9 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
 
         # Файлы диалога (вложения и созданные документы): целиком или выдержками по вопросу
         context_files = files_store.files_for_context(conv_id)
+        project = projects_repo.get_project(conv.get("project_id"))
+        if project:
+            context_files += files_store.project_files(project["id"])[:8]  # файлы проекта — в каждом его чате
         if context_files and user_messages:
             block, files_report = build_attachment_block(
                 context_files, user_messages[-1], attachments_budget(settings["num_ctx"]))
@@ -297,6 +331,9 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
         if settings["artifacts_enabled"]:
             hints.append(ARTIFACTS_HINT)
             history = compact_history(history)
+        # Проект и стиль чата (этап 15а)
+        hints.append(projects_repo.format_for_prompt(project))
+        hints.append(style_hint(conv.get("style")))
         # Уроки из исправлений и 👎 (этап 11) — модель учитывает их со следующего же ответа
         lessons = lessons_repo.enabled_lessons() if settings["lessons_enabled"] else []
         hints.append(lessons_block(lessons))
@@ -441,9 +478,13 @@ def list_conversations():
 def create_conversation(body: ConversationCreate):
     _check_persona(body.persona_id)
     _check_kb_scope(body.kb_scope)
+    _check_project(body.project_id)
+    _check_style(body.style)
+    if body.project_id:
+        projects_repo.touch(body.project_id)
     return repo.create_conversation(
         title=body.title or repo.DEFAULT_TITLE, model=body.model, persona_id=body.persona_id,
-        kb_scope=body.kb_scope,
+        kb_scope=body.kb_scope, project_id=body.project_id, style=body.style,
     )
 
 
@@ -452,6 +493,7 @@ def get_conversation(conv_id: str):
     conv = _get_or_404(conv_id)
     return {
         **conv,
+        "project": projects_repo.get_project(conv.get("project_id")),
         "messages": repo.list_messages(conv_id),
         # Что Джарвис запомнил в этом диалоге — чтобы показать под нужными ответами
         "memory_events": memory_repo.list_events(conversation_id=conv_id, limit=500),
@@ -469,6 +511,12 @@ def update_conversation(conv_id: str, body: ConversationUpdate):
     if "persona_id" in body.model_fields_set:
         _check_persona(body.persona_id)
         changes["persona_id"] = body.persona_id
+    if "project_id" in body.model_fields_set:  # null — убрать чат из проекта
+        _check_project(body.project_id)
+        changes["project_id"] = body.project_id
+    if body.style is not None:
+        _check_style(body.style)
+        changes["style"] = body.style
     return repo.update_conversation(conv_id, **changes)
 
 
@@ -515,3 +563,31 @@ async def regenerate(conv_id: str, body: RegenerateRequest):
     model = body.model or conv["model"] or settings_store.get("default_model")
     repo.update_conversation(conv_id, model=model)
     return _stream_response(_generate_answer(conv_id, model, body.think))
+
+
+@router.post("/{conv_id}/messages/{message_id}/edit")
+async def edit_message(conv_id: str, message_id: int, body: EditBody):
+    """Исправить свой вопрос: появляется новая ветка (старая сохраняется — переключатель «‹ 1/2 ›»)."""
+    conv = _get_or_404(conv_id)
+    path_ids = {m["id"] for m in repo.list_messages(conv_id)}
+    original = repo.get_message(message_id)
+    if original is None or original["conversation_id"] != conv_id or original["role"] != "user" or message_id not in path_ids:
+        raise HTTPException(status_code=404, detail="Сообщение не найдено в текущей ветке")
+    model = body.model or conv["model"] or settings_store.get("default_model")
+    # edited_from — самый первый вариант вопроса: к нему привязаны вложения (картинки, файлы)
+    first = (original.get("extras") or {}).get("edited_from") or message_id
+    extras = {**(original.get("extras") or {}), "edited_from": first}
+    repo.add_message(conv_id, "user", body.content, extras=extras, parent_id=original["parent_id"])
+    repo.update_conversation(conv_id, model=model)
+    return _stream_response(_generate_answer(conv_id, model, body.think))
+
+
+@router.post("/{conv_id}/branch")
+def switch_branch(conv_id: str, body: BranchBody):
+    """Переключиться на ветку, где есть message_id (ответ на другую версию вопроса)."""
+    _get_or_404(conv_id)
+    message = repo.get_message(body.message_id)
+    if message is None or message["conversation_id"] != conv_id:
+        raise HTTPException(status_code=404, detail="Сообщение не найдено")
+    repo.set_leaf(conv_id, body.message_id)
+    return get_conversation(conv_id)

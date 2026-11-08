@@ -1258,3 +1258,75 @@ img.ac-preview { max-width: 100%; max-height: 300px; margin: 0 auto; padding: 12
 @media (max-width: 768px) {
   .file-thumb, .file-thumb img { max-width: 160px; max-height: 160px; }
 }
+
+/* =====================================================================
+   Этап 15а: проекты, поиск, правка вопроса и ветки, стиль ответа
+   ===================================================================== */
+
+.kb-scope-row { gap: 10px; align-items: center; flex-wrap: wrap; }
+.kb-scope[hidden] { display: none; }
+.project-chip {
+  border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text); border-radius: 14px;
+  padding: 3px 10px; font-size: 13px; cursor: pointer; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.project-chip[hidden] { display: none; }
+.nav-kbd { margin-left: auto; font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-family: var(--font); }
+
+/* Свой вопрос: ✏️ и «‹ 1/2 ›» */
+.user-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; opacity: 0; transition: opacity .15s; }
+.user-actions[hidden] { display: none; }
+.msg-user:hover .user-actions, .user-actions:focus-within, .user-actions:has(.branch-nav) { opacity: 1; }
+.user-actions .icon-btn { width: 28px; height: 28px; }
+.branch-nav { display: flex; align-items: center; gap: 2px; font-size: 12.5px; color: var(--text-muted); }
+.branch-nav .icon-btn { font-size: 16px; }
+.branch-nav .icon-btn:disabled { opacity: .35; cursor: default; }
+.branch-count { min-width: 30px; text-align: center; font-variant-numeric: tabular-nums; }
+.edit-box { width: min(100%, 640px); display: flex; flex-direction: column; gap: 6px; }
+.edit-box textarea { background: var(--bg-elevated); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; resize: vertical; }
+.edit-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.edit-actions .hint { flex: 1; font-size: 12px; }
+.edit-actions .btn { padding: 5px 14px; }
+.msg.is-found .bubble, .msg-assistant.is-found .content { box-shadow: 0 0 0 2px var(--accent); border-radius: 12px; transition: box-shadow .3s; }
+
+/* Поиск */
+.search-dialog { width: min(640px, 94vw); padding: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-sidebar); color: var(--text); margin-top: 10vh; }
+.search-dialog::backdrop { background: rgba(0, 0, 0, .6); }
+.search-box { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.search-box input { flex: 1; background: transparent; border: 0; outline: none; font-size: 16px; color: var(--text); }
+.search-results { max-height: 60vh; overflow-y: auto; padding: 6px; }
+.search-item { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); cursor: pointer; }
+.search-item.is-active { background: var(--bg-active); }
+.si-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.si-snippet { font-size: 13px; color: var(--text-muted); }
+.si-snippet mark { background: rgba(124, 156, 255, .3); color: var(--text); border-radius: 3px; padding: 0 2px; }
+.search-empty { color: var(--text-faint); padding: 14px; margin: 0; }
+
+/* Проекты */
+.main.show-projects .messages, .main.show-projects .composer, .main.show-projects .banner,
+.main.show-projects .persona-picker, .main.show-projects .model-picker, .main.show-projects #think-toggle-wrap { display: none; }
+.projects-view { flex: 1; overflow-y: auto; padding: 8px 16px 40px; }
+.projects-view [hidden] { display: none; }
+.project-icon-input { width: 52px; text-align: center; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 8px; font-size: 18px; }
+.project-icon-input.big { width: 64px; font-size: 26px; }
+.projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 8px; }
+.project-card { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #1b1b1b; color: var(--text); cursor: pointer; text-align: left; }
+.project-card:hover { border-color: var(--accent); }
+.pc-icon { font-size: 26px; }
+.pc-name { font-weight: 600; }
+.pc-meta { font-size: 12.5px; color: var(--text-faint); }
+.project-head { display: flex; align-items: center; gap: 10px; margin: 12px 0 18px; flex-wrap: wrap; }
+.project-name-input { flex: 1; min-width: 180px; background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 6px 10px; font-size: 22px; font-weight: 600; color: var(--text); }
+.project-name-input:hover, .project-name-input:focus { border-color: var(--border); outline: none; }
+.project-section { margin-bottom: 22px; }
+.project-section h2 { font-size: 16px; margin: 0 0 4px; }
+.project-section textarea { width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; resize: vertical; margin: 6px 0; }
+.project-files, .project-chats { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.project-files.is-empty { color: var(--text-faint); font-size: 14px; }
+.project-file { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.project-file a { color: var(--text); text-decoration: none; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-chat { text-align: left; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: var(--text); cursor: pointer; }
+.project-chat:hover { border-color: var(--accent); }
+@media (max-width: 768px) {
+  .user-actions { opacity: 1; }
+  .nav-kbd { display: none; }
+}

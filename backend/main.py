@@ -28,6 +28,8 @@ from .files import store as files_store
 from .files.router import router as files_router
 from .lessons.router import router as lessons_router
 from .images.router import router as images_router
+from .chat.search import router as search_router
+from .projects.router import router as projects_router
 from .voice.router import router as voice_router
 from .settings.personas import ensure_builtin as ensure_builtin_personas
 from .settings.router import router as settings_router
@@ -62,6 +64,8 @@ app.include_router(export_router)
 app.include_router(files_router)
 app.include_router(lessons_router)
 app.include_router(images_router)
+app.include_router(search_router)
+app.include_router(projects_router)
 
 # Статика монтируется ПОСЛЕДНЕЙ: всё, что не /api/..., отдаётся как файлы интерфейса.
 # html=True — по адресу "/" отдаётся index.html.

@@ -76,7 +76,7 @@ def write_extra(record: dict, name: str, data: bytes) -> Path:
 
 def create_file(
     *, kind: str, name: str, data: bytes, mime: str, conversation_id: str | None = None,
-    text: str | None = None, meta: dict | None = None,
+    text: str | None = None, meta: dict | None = None, project_id: int | None = None,
 ) -> dict:
     file_id = uuid.uuid4().hex
     name = safe_name(name)
@@ -86,10 +86,10 @@ def create_file(
     try:
         with get_conn() as conn:
             conn.execute(
-                "INSERT INTO files (id, conversation_id, kind, name, mime, size, text, meta, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO files (id, conversation_id, kind, name, mime, size, text, meta, created_at, project_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (file_id, conversation_id, kind, name, mime, len(data), text,
-                 json.dumps(meta or {}, ensure_ascii=False), _now()),
+                 json.dumps(meta or {}, ensure_ascii=False), _now(), project_id),
             )
     except Exception:
         shutil.rmtree(folder, ignore_errors=True)  # запись в базу не удалась — не оставляем мусор на диске
@@ -125,7 +125,7 @@ def pending_uploads(file_ids: list[str], conversation_id: str) -> list[dict]:
     for fid in dict.fromkeys(file_ids):
         record = get_file(fid)
         if (record is None or record["kind"] != "upload" or record["message_id"] is not None
-                or record["conversation_id"] not in (None, conversation_id)):
+                or record.get("project_id") is not None or record["conversation_id"] not in (None, conversation_id)):
             raise ValueError("Вложение не найдено или уже отправлено — прикрепите файл заново")
         result.append(record)
     return result
@@ -165,6 +165,14 @@ def vision_inputs(conversation_id: str, message_ids: list[int]) -> list[dict]:
     return [r for r in records if r["message_id"] == latest]
 
 
+def project_files(project_id: int, with_text: bool = True) -> list[dict]:
+    """Файлы проекта (этап 15а): Джарвис учитывает их в каждом чате проекта."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM files WHERE project_id = ? ORDER BY created_at DESC, rowid DESC",
+                            (project_id,)).fetchall()
+    return [_to_dict(r, with_text) for r in rows]
+
+
 def find_in_conversation(conversation_id: str, ref: str, extension: str) -> dict | None:
     """Файл диалога по id или имени (без учёта регистра и расширения) — для инструмента правки."""
     ref = str(ref or "").strip().lower()
@@ -189,7 +197,8 @@ def cleanup() -> int:
     border = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(timespec="seconds")
     with get_conn() as conn:
         stale = [r["id"] for r in conn.execute(
-            "SELECT id FROM files WHERE kind = 'upload' AND message_id IS NULL AND created_at < ?", (border,))]
+            "SELECT id FROM files WHERE kind = 'upload' AND message_id IS NULL AND project_id IS NULL AND created_at < ?",
+            (border,))]
         known = {r["id"] for r in conn.execute("SELECT id FROM files")}
     for fid in stale:
         removed += delete_file(fid)

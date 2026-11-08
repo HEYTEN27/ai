@@ -150,6 +150,24 @@ export const api = {
     return response.json();
   },
 
+  listProjects: () => request("GET", "/api/projects"),
+  getProject: (id) => request("GET", `/api/projects/${id}`),
+  createProject: (data) => request("POST", "/api/projects", data),
+  updateProject: (id, data) => request("PATCH", `/api/projects/${id}`, data),
+  deleteProject: (id) => request("DELETE", `/api/projects/${id}`),
+  async uploadProjectFile(projectId, file) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("project_id", projectId);
+    const response = await fetch("/api/files", { method: "POST", body: form });
+    if (!response.ok) throw new Error(await errorText(response));
+    return response.json();
+  },
+  search: (q) => request("GET", `/api/search?q=${encodeURIComponent(q)}`),
+  switchBranch: (convId, messageId) => request("POST", `/api/conversations/${convId}/branch`, { message_id: messageId }),
+  editMessage: (convId, messageId, body, onEvent, signal) =>
+    streamSSE(`/api/conversations/${convId}/messages/${messageId}/edit`, body, onEvent, signal),
+
   visionModels: () => request("GET", "/api/models/vision"),
   pullModel: (name) => request("POST", "/api/models/pull", { name }),
   pullStatus: () => request("GET", "/api/models/pull"),

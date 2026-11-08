@@ -71,7 +71,7 @@ def build_snapshot(message_id: int) -> dict:
     if row["role"] != "assistant":
         raise DatasetError("Оценивать и исправлять можно только ответы ассистента")
     conv_id = row["conversation_id"]
-    messages = chat_repo.list_messages(conv_id)
+    messages = chat_repo.list_messages(conv_id, leaf_id=message_id)  # ветка, в которой этот ответ
     idx = next(i for i, m in enumerate(messages) if m["id"] == message_id)
     before = [m for m in messages[:idx] if m["role"] in ("user", "assistant")]
     if not before or before[-1]["role"] != "user":

@@ -75,7 +75,7 @@ async def learn(body: LearnBody):
     if not settings["lessons_enabled"]:
         return {"action": "none", "lesson": None, "previous": None, "note": "Уроки выключены в настройках"}
     # Вопрос, на который был этот ответ, — ближайшее сообщение пользователя перед ним
-    history = chat_repo.list_messages(message["conversation_id"])
+    history = chat_repo.list_messages(message["conversation_id"], leaf_id=message["id"])
     before = [m for m in history if m["id"] < message["id"] and m["role"] == "user"]
     question = before[-1]["content"] if before else ""
 

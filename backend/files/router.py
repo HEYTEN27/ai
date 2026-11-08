@@ -16,6 +16,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
 from ..chat import repository as chat_repo
+from ..projects import repository as projects_repo
 from . import docgen, store, vision
 from .extract import IMAGE_EXTENSIONS, MIME_TYPES, ExtractError, check_supported, extract_bytes, mime_for
 
@@ -33,7 +34,8 @@ def _get_or_404(file_id: str) -> dict:
 
 
 @router.post("", status_code=201)
-async def upload(file: UploadFile = File(...), conversation_id: str | None = Form(default=None)):
+async def upload(file: UploadFile = File(...), conversation_id: str | None = Form(default=None),
+                 project_id: int | None = Form(default=None)):
     name = store.safe_name(file.filename or "файл")
     try:
         check_supported(name)  # сначала расширение — не качаем зря 20 МБ картинки
@@ -41,6 +43,10 @@ async def upload(file: UploadFile = File(...), conversation_id: str | None = For
         raise HTTPException(status_code=415, detail=str(e)) from e
     if conversation_id and chat_repo.get_conversation(conversation_id) is None:
         raise HTTPException(status_code=404, detail="Диалог не найден")
+    if project_id is not None and projects_repo.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="Проект не найден")
+    if project_id is not None and Path(name).suffix.lower() in IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=415, detail="В проект кладите документы и тексты; картинки прикрепляйте к сообщению")
 
     # Читаем частями и обрываем на лимите, а не грузим в память файл любого размера
     data = bytearray()
@@ -72,8 +78,11 @@ async def upload(file: UploadFile = File(...), conversation_id: str | None = For
     except Exception as e:  # повреждённый файл: библиотека разбора упала с непредсказуемой ошибкой
         raise HTTPException(status_code=422, detail=f"Не удалось прочитать файл: {e}") from e
     meta = {**extracted.meta, "tokens": extracted.meta["chars"] // 3}
-    return store.create_file(kind="upload", name=name, data=data, mime=mime_for(name),
-                             conversation_id=conversation_id, text=extracted.text, meta=meta)
+    record = store.create_file(kind="upload", name=name, data=data, mime=mime_for(name),
+                               conversation_id=conversation_id, text=extracted.text, meta=meta, project_id=project_id)
+    if project_id is not None:
+        projects_repo.touch(project_id)
+    return record
 
 
 async def _upload_scan(data: bytes, name: str, conversation_id: str | None) -> dict:
@@ -144,6 +153,7 @@ def remove(file_id: str):
     record = store.get_file(file_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Файл не найден")
-    if record["kind"] != "upload" or record["message_id"] is not None:
+    # Удалить можно ещё не отправленное вложение или файл проекта
+    if record["kind"] != "upload" or (record["message_id"] is not None and record.get("project_id") is None):
         raise HTTPException(status_code=409, detail="Файл уже в переписке — он удалится вместе с диалогом")
     store.delete_file(file_id)

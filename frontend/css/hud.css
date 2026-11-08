@@ -369,6 +369,16 @@ body[data-core="speaking"] .tts-toggle { color: var(--accent); box-shadow: var(-
 [data-theme="hud"] .file-thumb:hover { box-shadow: var(--glow); }
 [data-theme="hud"] .attach-chip .a-icon.has-thumb { border-radius: 2px; }
 
+/* ---------- проекты, поиск, ветки (этап 15а) ---------- */
+
+[data-theme="hud"] :is(.project-card, .project-file, .project-chat, .project-chip) { border-radius: 3px; background: var(--panel); border-color: rgba(63, 217, 255, .22); }
+[data-theme="hud"] .project-card:hover, [data-theme="hud"] .project-chat:hover { box-shadow: var(--glow); border-color: rgba(63, 217, 255, .6); }
+[data-theme="hud"] .search-dialog { border-radius: 3px; border-color: rgba(63, 217, 255, .4); background: linear-gradient(180deg, rgba(4, 16, 28, .98), rgba(2, 8, 16, .98)); box-shadow: var(--glow); }
+[data-theme="hud"] .si-snippet mark { background: rgba(63, 217, 255, .25); }
+[data-theme="hud"] .search-item.is-active { background: rgba(63, 217, 255, .1); }
+[data-theme="hud"] .edit-box textarea { border-radius: 3px; }
+[data-theme="hud"] .project-name-input { font-family: var(--font-hud); letter-spacing: .04em; }
+
 /* ---------- узкие экраны и «меньше анимаций» ---------- */
 
 @media (max-width: 768px) {

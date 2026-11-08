@@ -57,7 +57,7 @@ function createItem(conv, isActive, { onOpen, onRename, onDelete }) {
   const title = document.createElement("button");
   title.type = "button";
   title.className = "conv-title";
-  title.textContent = conv.title;
+  title.textContent = conv.projectIcon ? `${conv.projectIcon} ${conv.title}` : conv.title; // чат в проекте — со значком
   title.title = conv.title;
   title.addEventListener("click", () => onOpen(conv.id));
   title.addEventListener("dblclick", () => startRename());

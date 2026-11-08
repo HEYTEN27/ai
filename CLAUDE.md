@@ -213,5 +213,14 @@
       extras/start.vision {model, images, instead_of}. /api/models/vision (каталог: qwen3-vl:8b, qwen2.5vl:7b,
       gemma3:4b, minicpm-v:8b) и /api/models/pull (Ollama /api/pull с прогрессом, LLMBackend.pull). UI: миниатюры в
       чипах и сообщениях, Ctrl+V скриншота, «👁 N картинка», «Подключаю модель зрения…», раздел в настройках
+- [x] Этап 15а: проекты и удобство. Миграция №8: projects (name, icon, instructions), conversations.project_id
+      (SET NULL)/style/leaf_id, messages.parent_id (заполнен по порядку), files.project_id (CASCADE), messages_fts
+      (FTS5 external content + триггеры ai/ad/au, rebuild). Ветки: list_messages строит путь от leaf к корню, у
+      «братьев» (тот же parent и роль) branch {index,count,ids}; add_message добавляет в конец активной ветки
+      (или после parent_id) и двигает leaf; edit → новый user с parent исходного + extras.edited_from (вложения
+      исходного остаются видны зрению); POST /branch → set_leaf (спуск по свежим детям); датасет/уроки строят
+      ветку по leaf_id=ответ. Проекты: инструкции в системный промпт, файлы проекта (≤8) в блок вложений;
+      картинки в проект нельзя. Поиск: /api/search ("слово"* AND, snippet с \u0001/\u0002 → <mark>, + названия).
+      Стили (chat/styles.py) — приписка к промпту. UI: проекты, Ctrl+K, ✏️ и «‹ 1/2 ›», стиль у поля ввода
 
-Этапы 1–14 готовы. Дальше по плану: 15 проекты, удобство и 3D-модели.
+Этапы 1–15а готовы. Дальше: 15б — 3D-модели (по подтверждению пользователя).

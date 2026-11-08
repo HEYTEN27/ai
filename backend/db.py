@@ -226,6 +226,46 @@ MIGRATIONS: list[str] = [
         updated_at       TEXT NOT NULL
     );
     """,
+    # --- Миграция 8 (этап 15а): проекты, ветки сообщений, стили ответа, поиск по диалогам ---
+    """
+    -- Проект — папка чатов со своими инструкциями и файлами
+    CREATE TABLE projects (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        name          TEXT NOT NULL,
+        icon          TEXT NOT NULL DEFAULT '📁',
+        instructions  TEXT NOT NULL DEFAULT '',   -- добавляются к системному промпту во всех чатах проекта
+        created_at    TEXT NOT NULL,
+        updated_at    TEXT NOT NULL
+    );
+    ALTER TABLE conversations ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;
+    ALTER TABLE conversations ADD COLUMN style TEXT NOT NULL DEFAULT 'normal';  -- стиль ответов этого чата
+    -- Ветки: у каждого сообщения есть «родитель» (предыдущее сообщение ветки), у диалога —
+    -- последнее сообщение активной ветки. Правка вопроса создаёт «брата» — и новую ветку.
+    ALTER TABLE conversations ADD COLUMN leaf_id INTEGER;
+    ALTER TABLE messages ADD COLUMN parent_id INTEGER REFERENCES messages(id) ON DELETE SET NULL;
+    UPDATE messages SET parent_id = (
+        SELECT MAX(m2.id) FROM messages m2 WHERE m2.conversation_id = messages.conversation_id AND m2.id < messages.id
+    );
+    CREATE INDEX idx_messages_parent ON messages(parent_id);
+    ALTER TABLE files ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE;
+    CREATE INDEX idx_conversations_project ON conversations(project_id);
+
+    -- Полнотекстовый поиск по сообщениям (FTS5, «внешнее содержимое» — текст не дублируется)
+    CREATE VIRTUAL TABLE messages_fts USING fts5(
+        content, content='messages', content_rowid='id', tokenize='unicode61 remove_diacritics 2'
+    );
+    INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');
+    CREATE TRIGGER messages_fts_ai AFTER INSERT ON messages BEGIN
+        INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+    END;
+    CREATE TRIGGER messages_fts_ad AFTER DELETE ON messages BEGIN
+        INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, old.content);
+    END;
+    CREATE TRIGGER messages_fts_au AFTER UPDATE OF content ON messages BEGIN
+        INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, old.content);
+        INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+    END;
+    """,
 ]
 
 

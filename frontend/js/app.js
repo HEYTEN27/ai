@@ -16,6 +16,7 @@ import {
   renderHistory,
   setMemoryLookup,
   setPersonaLookup,
+  setUserMessageHandlers,
 } from "./chat.js";
 import { initDatasetPage, refreshDatasetPage } from "./dataset.js";
 import { initTrainingPage, refreshTrainingPage } from "./training.js";
@@ -32,6 +33,8 @@ import { initKnowledgePage, refreshKnowledgePage } from "./knowledge.js";
 import { initMemoryPage, refreshMemoryPage } from "./memory.js";
 import { initLessons, refreshLessons } from "./lessons.js";
 import { initImagesPage, refreshImagesPage } from "./images.js";
+import { initProjectsPage, loadProjects, openProject, projectsById, refreshProjectsPage } from "./projects.js";
+import { initSearch } from "./search.js";
 import { autoCheck, setCodeFixHandler } from "./coderun.js";
 import { initSettings } from "./settings.js";
 import { renderConversationList } from "./sidebar.js";
@@ -184,7 +187,10 @@ async function refreshConversations() {
   } catch {
     state.conversations = [];
   }
-  renderConversationList(state.conversations, state.activeId, {
+  await loadProjects();
+  // Чаты проектов — со значком проекта
+  const list = state.conversations.map((c) => ({ ...c, projectIcon: projectsById.get(c.project_id)?.icon || null }));
+  renderConversationList(list, state.activeId, {
     onOpen: (id) => openConversation(id),
     onRename: async (id, title) => {
       await api.updateConversation(id, { title });
@@ -198,15 +204,20 @@ async function refreshConversations() {
   });
 }
 
-async function openConversation(id) {
+async function openConversation(id, { focusMessage = null } = {}) {
   if (state.abortController) stopGeneration();
   if (id !== state.activeId) closeArtifact(); // артефакт другого диалога не оставляем открытым
   try {
-    const conv = await api.getConversation(id);
+    let conv = await api.getConversation(id);
+    // Из поиска: найденное сообщение может быть в другой ветке — переключаемся на неё
+    if (focusMessage && !conv.messages.some((m) => m.id === focusMessage)) conv = await api.switchBranch(id, focusMessage);
     state.activeId = conv.id;
+    state.newChatProject = null;
     setHash(conv.id);
     setPersonaSelect(conv.persona_id ?? state.defaultPersonaId);
     setKnowledgeScope(conv.kb_scope || "all");
+    styleSelect.value = conv.style || "normal";
+    showProjectChip(conv.project);
     if (conv.model && state.models.has(conv.model)) {
       modelSelect.value = conv.model;
       updateThinkToggle();
@@ -217,6 +228,7 @@ async function openConversation(id) {
       memoryEvents: conv.memory_events,
       onUndoMemory: undoMemoryEvent,
     });
+    if (focusMessage) focusOnMessage(focusMessage);
   } catch {
     // Диалог удалён или ссылка устарела — открываем новый
     newChat();
@@ -227,10 +239,32 @@ async function openConversation(id) {
   input.focus();
 }
 
-function newChat() {
+/** Прокрутить к сообщению и подсветить его (переход из поиска). */
+function focusOnMessage(messageId) {
+  const el = document.querySelector(`#messages .msg[data-id="${messageId}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: "center" });
+  el.classList.add("is-found");
+  setTimeout(() => el.classList.remove("is-found"), 2500);
+}
+
+/** «📁 Курсовая» над полем ввода — чат в проекте; клик открывает проект. */
+function showProjectChip(project) {
+  const chip = $("project-chip");
+  chip.hidden = !project;
+  if (project) {
+    chip.textContent = `${project.icon} ${project.name}`;
+    chip.dataset.id = project.id;
+  }
+}
+
+function newChat(project = null) {
   if (state.abortController) stopGeneration();
   closeArtifact();
   state.activeId = null;
+  state.newChatProject = project; // новый чат создастся в этом проекте при первом сообщении
+  styleSelect.value = "normal";
+  showProjectChip(project);
   showChatView();
   setHash(null);
   setPersonaSelect(state.defaultPersonaId);
@@ -263,6 +297,7 @@ const PAGES = {
   knowledge: { hash: "#/knowledge", view: "knowledge-view", button: "knowledge-btn", refresh: () => refreshKnowledgePage() },
   dataset: { hash: "#/dataset", view: "dataset-view", button: "dataset-btn", refresh: () => refreshDatasetPage() },
   training: { hash: "#/training", view: "training-view", button: "training-btn", refresh: () => refreshTrainingPage() },
+  projects: { hash: "#/projects", view: "projects-view", button: "projects-btn", refresh: () => refreshProjectsPage() },
   images: { hash: "#/images", view: "images-view", button: "images-btn", refresh: () => refreshImagesPage() },
 };
 
@@ -302,6 +337,13 @@ $("dataset-btn").addEventListener("click", () => showPage("dataset"));
 initDatasetPage();
 $("training-btn").addEventListener("click", () => showPage("training"));
 $("images-btn").addEventListener("click", () => showPage("images"));
+$("projects-btn").addEventListener("click", () => showPage("projects"));
+initProjectsPage({
+  onOpenChat: (id) => openConversation(id),
+  onNewChat: (project) => newChat(project),
+  onChanged: () => refreshConversations(),
+});
+initSearch({ onOpenResult: (convId, messageId) => openConversation(convId, { focusMessage: messageId }) });
 initImagesPage();
 // Новая модель подключена — обновляем список моделей вверху
 initTrainingPage({ onModelAdded: () => loadModels() });
@@ -329,7 +371,7 @@ const kbScope = $("kb-scope");
 /** Варианты: вся база / одна коллекция / без базы. Строка видна, только если есть готовые документы. */
 function fillKnowledgeScope(overview) {
   const ready = overview?.stats?.ready > 0;
-  $("kb-scope-row").hidden = !ready;
+  $("kb-scope-label").hidden = !ready; // строка над полем есть всегда (стиль), а выбор базы — только если она есть
   if (!ready) return;
   const previous = kbScope.value || "all";
   kbScope.innerHTML = "";
@@ -349,6 +391,16 @@ function setKnowledgeScope(value) {
 async function refreshKnowledgeScope() {
   fillKnowledgeScope(await api.knowledge().catch(() => null));
 }
+
+// Стиль ответов (этап 15а): у нового чата — до первого сообщения, у открытого — сразу на сервер
+const styleSelect = $("style-select");
+styleSelect.addEventListener("change", async () => {
+  if (state.activeId) await api.updateConversation(state.activeId, { style: styleSelect.value }).catch(() => {});
+});
+$("project-chip").addEventListener("click", () => {
+  showPage("projects");
+  openProject(Number($("project-chip").dataset.id));
+});
 
 kbScope.addEventListener("change", async () => {
   if (state.activeId) {
@@ -390,7 +442,10 @@ async function sendMessage(text) {
   // Новый диалог создаём на сервере только при первом сообщении
   if (!state.activeId) {
     try {
-      const conv = await api.createConversation({ model, persona_id: selectedPersonaId(), kb_scope: kbScope.value || "all" });
+      const conv = await api.createConversation({
+        model, persona_id: selectedPersonaId(), kb_scope: kbScope.value || "all",
+        project_id: state.newChatProject?.id ?? null, style: styleSelect.value,
+      });
       state.activeId = conv.id;
       setHash(conv.id);
     } catch (e) {
@@ -419,6 +474,23 @@ async function sendMessage(text) {
     }, onEvent, signal),
   );
 }
+
+// Правка своего вопроса → новая ветка; «‹ 1/2 ›» → переключение веток (этап 15а)
+setUserMessageHandlers({
+  onEdit: async (messageId, text) => {
+    if (!state.activeId || state.abortController || !messageId) return;
+    const model = selectedModel();
+    await streamAnswer((onEvent, signal) =>
+      api.editMessage(state.activeId, messageId, { content: text, model, think: thinkToggle.checked }, onEvent, signal));
+    const conv = await api.getConversation(state.activeId).catch(() => null);
+    if (conv) renderHistory(conv.messages, { onRetry: regenerate, memoryEvents: conv.memory_events, onUndoMemory: undoMemoryEvent });
+  },
+  onBranch: async (messageId) => {
+    if (!state.activeId || state.abortController) return;
+    const conv = await api.switchBranch(state.activeId, messageId).catch((e) => alert(e.message));
+    if (conv) renderHistory(conv.messages, { onRetry: regenerate, memoryEvents: conv.memory_events, onUndoMemory: undoMemoryEvent });
+  },
+});
 
 /** «Ответить заново»: удаляем последний ответ и генерируем новый (можно другой моделью). */
 async function regenerate() {
@@ -496,6 +568,10 @@ async function streamAnswer(startRequest) {
       release();
       play("done");
       speaker.finish(spokenText); // дочитать хвост ответа
+      // Вопрос сохранён на сервере: его id — родитель ответа. Теперь вопрос можно изменить (✏️)
+      const lastUser = [...document.querySelectorAll("#messages .msg-user")].at(-1);
+      if (lastUser && data.message?.parent_id && !lastUser.dataset.id) lastUser.dataset.id = data.message.parent_id;
+      if (data.message?.id) bubble.element.dataset.id = data.message.id;
       if (!isSpeaking()) setCoreState("idle"); // голос ещё звучит — ядро остаётся в режиме «говорит»
       autoOpen(bubble.element); // новая игра или схема — сразу в панели
       maybeAutoCheck(bubble.element);
@@ -635,7 +711,7 @@ document.querySelectorAll(".suggestion").forEach((btn) => {
   btn.addEventListener("click", () => sendMessage(btn.textContent));
 });
 
-$("new-chat-btn").addEventListener("click", newChat);
+$("new-chat-btn").addEventListener("click", () => newChat()); // без аргумента: обычный чат, не в проекте
 
 // Esc останавливает генерацию
 document.addEventListener("keydown", (e) => {

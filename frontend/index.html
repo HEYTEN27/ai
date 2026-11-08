@@ -32,6 +32,14 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           Новый чат
         </button>
+        <button class="btn btn-nav" id="search-btn" type="button" title="Поиск по всем диалогам (Ctrl+K)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          Поиск <kbd class="nav-kbd">Ctrl K</kbd>
+        </button>
+        <button class="btn btn-nav" id="projects-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+          Проекты
+        </button>
         <button class="btn btn-nav" id="memory-btn" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 2a2.5 2.5 0 0 1 2.5 2.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24A2.5 2.5 0 0 0 14.5 2Z"/></svg>
           Память
@@ -299,6 +307,56 @@
       </section>
 
       <!-- ===== Страница «Обучение» ===== -->
+      <section class="page-view projects-view" id="projects-view" hidden aria-labelledby="projects-title">
+        <div class="memory-inner">
+          <div id="projects-list-view">
+            <header class="memory-head">
+              <h1 id="projects-title">Проекты</h1>
+              <p class="memory-sub">Проект — папка чатов со своими инструкциями и файлами: «Курсовая по БД», «Подготовка
+                к сессии». Всё, что лежит в проекте, Джарвис учитывает в каждом его чате.</p>
+            </header>
+            <form class="lesson-add" id="project-new-form">
+              <input id="project-new-icon" class="project-icon-input" maxlength="4" value="📁" aria-label="Значок">
+              <input id="project-new-name" maxlength="80" placeholder="Название нового проекта" aria-label="Название проекта">
+              <button type="submit" class="btn btn-primary">Создать проект</button>
+            </form>
+            <div class="projects-grid" id="projects-grid"></div>
+          </div>
+
+          <div id="project-detail" hidden>
+            <button type="button" class="link-btn small" id="project-back">← Все проекты</button>
+            <header class="project-head">
+              <input id="project-icon" class="project-icon-input big" maxlength="4" aria-label="Значок проекта">
+              <input id="project-name" class="project-name-input" maxlength="80" aria-label="Название проекта">
+              <button type="button" class="btn btn-primary" id="project-new-chat">＋ Новый чат в проекте</button>
+            </header>
+            <section class="project-section">
+              <h2>Инструкции</h2>
+              <p class="hint">Добавляются к системному промпту во всех чатах проекта: о чём проект, что важно, как отвечать.</p>
+              <textarea id="project-instructions" rows="5" maxlength="4000"
+                placeholder="Например: Это курсовая по базам данных. Тема — учёт книг в библиотеке. Примеры — на PostgreSQL."></textarea>
+              <div class="kb-row"><span class="spacer"></span><span class="hint" id="project-saved"></span>
+                <button type="button" class="btn" id="project-save">Сохранить</button></div>
+            </section>
+            <section class="project-section">
+              <h2>Файлы проекта</h2>
+              <p class="hint">Методички, задание, заметки — Джарвис учитывает их в каждом чате проекта (небольшие целиком,
+                большие — выдержками по вопросу). Для десятков документов удобнее «База знаний».</p>
+              <div class="project-files" id="project-files"></div>
+              <input type="file" id="project-file-input" multiple hidden>
+              <button type="button" class="btn" id="project-add-file">📎 Добавить файлы</button>
+            </section>
+            <section class="project-section">
+              <h2>Чаты</h2>
+              <div class="project-chats" id="project-chats"></div>
+            </section>
+            <div class="memory-danger">
+              <button type="button" class="btn btn-danger" id="project-delete">Удалить проект</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="page-view images-view" id="images-view" hidden aria-labelledby="images-title">
         <div class="memory-inner">
           <header class="memory-head">
@@ -441,8 +499,19 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
       </section>
 
       <form class="composer" id="composer">
-        <div class="kb-scope-row" id="kb-scope-row" hidden>
-          <label class="kb-scope" title="Где искать ответы: в ваших документах или нет">
+        <div class="kb-scope-row" id="kb-scope-row">
+          <button type="button" class="project-chip" id="project-chip" hidden title="Чат в проекте — открыть проект"></button>
+          <label class="kb-scope style-picker" title="Стиль ответов в этом чате">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+            <select id="style-select" aria-label="Стиль ответов">
+              <option value="normal">Обычный стиль</option>
+              <option value="concise">Кратко</option>
+              <option value="detailed">Подробно</option>
+              <option value="simple">Простыми словами</option>
+              <option value="formal">Официально</option>
+            </select>
+          </label>
+          <label class="kb-scope" id="kb-scope-label" title="Где искать ответы: в ваших документах или нет" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
             <select id="kb-scope" aria-label="База знаний"></select>
           </label>
@@ -470,6 +539,16 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         <div class="drop-box">📎 Отпустите, чтобы прикрепить файлы<small>Картинки, PDF, Word, Excel, PowerPoint, текст, код — до 25 МБ</small></div>
       </div>
     </main>
+
+    <!-- Поиск по диалогам (этап 15а) -->
+    <dialog class="search-dialog" id="search-dialog" aria-label="Поиск по диалогам">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search-input" placeholder="Поиск по всем диалогам…" autocomplete="off" aria-label="Что искать">
+        <kbd class="nav-kbd">Esc</kbd>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </dialog>
 
     <!-- Просмотр картинки (этап 13) -->
     <dialog class="img-lightbox" id="img-lightbox" aria-label="Картинка">

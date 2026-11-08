@@ -88,10 +88,73 @@ function fileChip(file) {
   return a;
 }
 
-export function addUserMessage(text, attachments = []) {
+// Правка своего вопроса и переключение веток (этап 15а). Обработчики задаёт app.js.
+let userHandlers = { onEdit: null, onBranch: null };
+export function setUserMessageHandlers(handlers) {
+  userHandlers = { ...userHandlers, ...handlers };
+}
+
+/** «‹ 2/3 ›» — переключатель версий вопроса. */
+function branchNav(message) {
+  const nav = el("div", "branch-nav");
+  const { index, count, ids } = message.branch;
+  const prev = el("button", "icon-btn", "‹");
+  const next = el("button", "icon-btn", "›");
+  prev.type = next.type = "button";
+  prev.title = "Предыдущая версия вопроса";
+  next.title = "Следующая версия вопроса";
+  prev.disabled = index <= 1;
+  next.disabled = index >= count;
+  prev.addEventListener("click", () => userHandlers.onBranch?.(ids[index - 2]));
+  next.addEventListener("click", () => userHandlers.onBranch?.(ids[index]));
+  nav.append(prev, el("span", "branch-count", `${index}/${count}`), next);
+  return nav;
+}
+
+/** Встроенный редактор вопроса: «Отправить» создаёт новую ветку, старая остаётся. */
+function startEditing(msg, bubble) {
+  if (msg.querySelector(".edit-box")) return;
+  const box = el("div", "edit-box");
+  const textarea = document.createElement("textarea");
+  textarea.value = bubble.textContent;
+  textarea.rows = Math.min(12, Math.max(2, textarea.value.split("\n").length + 1));
+  const actions = el("div", "edit-actions");
+  const cancel = el("button", "btn", "Отмена");
+  const send = el("button", "btn btn-primary", "Отправить");
+  cancel.type = send.type = "button";
+  actions.append(el("span", "hint", "Старый вариант сохранится — между версиями можно переключаться."), cancel, send);
+  box.append(textarea, actions);
+  bubble.hidden = true;
+  msg.querySelector(".user-actions")?.setAttribute("hidden", "");
+  bubble.after(box);
+  textarea.focus();
+  const close = () => {
+    box.remove();
+    bubble.hidden = false;
+    msg.querySelector(".user-actions")?.removeAttribute("hidden");
+  };
+  cancel.addEventListener("click", close);
+  const submit = () => {
+    const text = textarea.value.trim();
+    if (!text) return;
+    close();
+    bubble.textContent = text;
+    // Всё, что было после этого вопроса, относится к старой ветке — убираем с экрана
+    while (msg.nextElementSibling) msg.nextElementSibling.remove();
+    userHandlers.onEdit?.(Number(msg.dataset.id), text);
+  };
+  send.addEventListener("click", submit);
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+    if (e.key === "Escape") close();
+  });
+}
+
+export function addUserMessage(text, attachments = [], { message = null } = {}) {
   hideEmptyState();
   const msg = document.createElement("div");
   msg.className = "msg msg-user";
+  if (message?.id) msg.dataset.id = message.id;
   if (attachments.length) {
     const files = el("div", "msg-files");
     for (const f of attachments) files.append(fileChip(f));
@@ -101,6 +164,15 @@ export function addUserMessage(text, attachments = []) {
   bubble.className = "bubble";
   bubble.textContent = text; // textContent, а не innerHTML — текст пользователя не исполняется как HTML
   msg.append(bubble);
+  const actions = el("div", "user-actions");
+  if (message?.branch) actions.append(branchNav(message));
+  const edit = el("button", "icon-btn btn-edit-q");
+  edit.type = "button";
+  edit.title = "Изменить вопрос";
+  edit.innerHTML = ICONS.edit;
+  edit.addEventListener("click", () => msg.dataset.id && startEditing(msg, bubble));
+  actions.append(edit);
+  msg.append(actions);
   messagesEl().append(msg);
   scrollToBottom(true);
   return msg;
@@ -931,9 +1003,10 @@ export function renderHistory(messages, { onRetry, memoryEvents = [], onUndoMemo
   let lastAssistant = null;
   for (const m of messages) {
     if (m.role === "user") {
-      addUserMessage(m.content, m.extras?.attachments || []);
+      addUserMessage(m.content, m.extras?.attachments || [], { message: m });
     } else if (m.role === "assistant") {
       lastAssistant = createAssistantMessage({ onRetry });
+      lastAssistant.element.dataset.id = m.id; // для перехода к сообщению из поиска
       for (const entry of m.extras?.tools || []) lastAssistant.toolResult(entry); // карточки инструментов
       lastAssistant.finish({ message: m });
       lastAssistant.showMemoryEvents(eventsByMessage.get(m.id), onUndoMemory);

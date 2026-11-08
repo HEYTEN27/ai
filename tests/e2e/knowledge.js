@@ -88,7 +88,7 @@ async function send(page, text) {
 
   await page.goto(APP + '/');
   await page.waitForSelector('#conn-status.is-ok');
-  assert(await page.isHidden('#kb-scope-row'), 'пока база пуста — выбора базы знаний у поля ввода нет');
+  assert(await page.isHidden('#kb-scope-label'), 'пока база пуста — выбора базы знаний у поля ввода нет');
 
   // --- Загрузка файлов ---
   await page.click('#knowledge-btn');
@@ -130,7 +130,7 @@ async function send(page, text) {
 
   // --- Ответ со ссылками ---
   await page.click('#new-chat-btn');
-  await page.waitForSelector('#kb-scope-row:not([hidden])');
+  await page.waitForSelector('#kb-scope-label:not([hidden])');
   const scopes = await page.$$eval('#kb-scope option', (o) => o.map((x) => x.textContent));
   assert(scopes[0] === 'Искать в базе знаний' && scopes.includes('Только «Obsidian Vault»') && scopes.at(-1) === 'Без базы знаний', 'выбор базы знаний у поля ввода');
   await send(page, 'Объясни, что такое замыкание и как работает счётчик');
