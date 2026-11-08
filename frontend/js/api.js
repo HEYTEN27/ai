@@ -140,6 +140,15 @@ export const api = {
   checkFolder: (path) => request("GET", `/api/tools/files/check?path=${encodeURIComponent(path)}`),
 
   trainingStatus: () => request("GET", "/api/training/status"),
+  voiceStatus: () => request("GET", "/api/voice/status"),
+  /** Распознавание речи: запись отправляем как файл (multipart). */
+  async transcribe(blob) {
+    const form = new FormData();
+    form.append("audio", blob, blob.type.includes("ogg") ? "voice.ogg" : "voice.webm");
+    const response = await fetch("/api/voice/transcribe", { method: "POST", body: form });
+    if (!response.ok) throw new Error(await errorText(response));
+    return response.json();
+  },
 
   rateMessage: (messageId, rating) => request("POST", "/api/dataset/feedback", { message_id: messageId, rating }),
   correctMessage: (messageId, corrected) => request("POST", "/api/dataset/correct", { message_id: messageId, corrected }),

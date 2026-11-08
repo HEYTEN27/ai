@@ -17,6 +17,7 @@ const assert = (c, m) => { if (!c) { throw new Error('FAIL: ' + m); } console.lo
   assert(await page.textContent('.conn-text') === 'Ollama 0.34.4-fake', 'статус Ollama');
   assert(await page.title() === 'Джарвис', 'имя ассистента во вкладке');
   assert((await page.textContent('#greeting')).startsWith('Джарвис на связи'), 'приветствие с именем');
+  await page.waitForFunction(() => document.querySelectorAll('#model-select option').length >= 3);
   const options = await page.$$eval('#model-select option', o => o.map(x => x.textContent));
   console.log('  модели:', options);
   assert(await page.inputValue('#model-select') === 'qwen3:8b', 'по умолчанию qwen3:8b');

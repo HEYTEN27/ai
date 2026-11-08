@@ -6,6 +6,7 @@
 import { api } from "./api.js";
 import { initPersonasTab, showPersonasTab } from "./personas-editor.js";
 import { initToolsTab, showToolsTab } from "./tools-settings.js";
+import { initDataTab, showDataTab } from "./data-settings.js";
 
 const $ = (id) => document.getElementById(id);
 const dialog = $("settings-dialog");
@@ -55,6 +56,7 @@ export function initSettings({ getModels, getPersonas, onSaved }) {
   $("general-form").addEventListener("submit", saveGeneral);
   initPersonasTab({ getModels, onChanged: onSaved });
   initToolsTab({ onClose: () => dialog.close() });
+  initDataTab({ onClose: () => dialog.close() });
 }
 
 function switchTab(name) {
@@ -66,6 +68,7 @@ function switchTab(name) {
   dialog.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = p.dataset.panel !== name));
   if (name === "personas") showPersonasTab();
   if (name === "tools") showToolsTab();
+  if (name === "data") showDataTab();
 }
 
 async function openSettings({ getModels, getPersonas }) {

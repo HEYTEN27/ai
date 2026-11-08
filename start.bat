@@ -1,29 +1,27 @@
 @echo off
 rem ================================================================
 rem  Запуск ассистента на Windows: двойной клик по этому файлу.
-rem  При первом запуске создаёт виртуальное окружение и ставит пакеты.
-rem  (Полноценный скрипт с проверками появится на этапе 8.)
+rem  Здесь только создаётся окружение Python — всё остальное
+rem  (пакеты, Ollama, модели, браузер) делает scripts\launcher.py.
+rem  Флаги: start.bat --yes   (скачать всё без вопросов)
 rem ================================================================
 chcp 65001 >nul
 cd /d "%~dp0"
 
 if not exist ".venv\Scripts\python.exe" (
-    echo [1/2] Создаю виртуальное окружение Python...
+    echo Создаю окружение Python ^(один раз^)...
     py -3.12 -m venv .venv 2>nul || py -3.11 -m venv .venv 2>nul || python -m venv .venv
-    if errorlevel 1 (
-        echo Не найден Python. Установите Python 3.12 с python.org ^(галочка "Add to PATH"^).
-        pause
-        exit /b 1
-    )
+    if errorlevel 1 goto :no_python
 )
 
-echo [2/2] Проверяю зависимости...
-".venv\Scripts\python.exe" -m pip install -q --disable-pip-version-check -r requirements.txt
-if errorlevel 1 (
-    echo Не удалось установить зависимости. Проверьте интернет и запустите ещё раз.
-    pause
-    exit /b 1
-)
+".venv\Scripts\python.exe" scripts\launcher.py %*
+if errorlevel 1 pause
+exit /b
 
-".venv\Scripts\python.exe" -m backend --open
+:no_python
+echo.
+echo Не найден Python 3.11 или 3.12.
+echo Установите Python 3.12 с https://www.python.org/downloads/
+echo (при установке отметьте галочку "Add python.exe to PATH") и запустите start.bat снова.
 pause
+exit /b 1

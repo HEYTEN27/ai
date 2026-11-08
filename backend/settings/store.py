@@ -83,6 +83,10 @@ def defaults() -> dict:
         "confirm_web": False,  # спрашивать перед поиском / открытием страницы
         "web_provider": "duckduckgo",  # duckduckgo | searxng
         "searxng_url": "",
+        # --- Голосовой ввод (этап 8) ---
+        "voice_enabled": True,
+        "whisper_model": "small",  # tiny | base | small | medium
+        "voice_language": "ru",  # ru | en | auto (определять самостоятельно)
     }
 
 
@@ -122,7 +126,7 @@ def _validate(key: str, value):
         if not 0 <= value <= 16:
             raise SettingsError("Занято другими программами: от 0 до 16 ГиБ")
     elif key in ("memory_enabled", "memory_autosave", "embedding_on_gpu", "tools_enabled", "tool_calculator",
-                 "tool_web", "tool_files", "tool_python", "confirm_python", "confirm_web"):
+                 "tool_web", "tool_files", "tool_python", "confirm_python", "confirm_web", "voice_enabled"):
         if not isinstance(value, bool):
             raise SettingsError("Ожидается да/нет (true/false)")
     elif key == "memory_budget_tokens":
@@ -164,6 +168,12 @@ def _validate(key: str, value):
         value = str(value).strip().rstrip("/")
         if value and not value.startswith(("http://", "https://")):
             raise SettingsError("Адрес SearXNG должен начинаться с http:// или https://")
+    elif key == "whisper_model":
+        if value not in ("tiny", "base", "small", "medium"):
+            raise SettingsError("Модель распознавания: tiny, base, small или medium")
+    elif key == "voice_language":
+        if value not in ("ru", "en", "auto"):
+            raise SettingsError("Язык распознавания: ru, en или auto")
     elif key == "embedding_model":
         value = str(value).strip()
         if not value:

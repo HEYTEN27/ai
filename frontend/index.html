@@ -347,6 +347,11 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         </div>
         <div class="composer-box">
           <textarea id="input" rows="1" placeholder="Напишите сообщение…" aria-label="Сообщение"></textarea>
+          <span class="mic-timer" id="mic-timer" hidden>0:00</span>
+          <button class="icon-btn mic-btn" id="mic-btn" type="button" title="Голосовой ввод (распознаётся на этом компьютере)" aria-label="Голосовой ввод" hidden>
+            <svg class="icon-mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>
+            <svg class="icon-stop-rec" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </button>
           <button class="send-btn" id="send-btn" type="submit" aria-label="Отправить" disabled>
             <svg class="icon-send" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
             <svg class="icon-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
@@ -383,6 +388,7 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         <button type="button" role="tab" class="tab active" data-tab="general" aria-selected="true">Основное</button>
         <button type="button" role="tab" class="tab" data-tab="personas" aria-selected="false">Персоны</button>
         <button type="button" role="tab" class="tab" data-tab="tools" aria-selected="false">Инструменты</button>
+        <button type="button" role="tab" class="tab" data-tab="data" aria-selected="false">Голос и данные</button>
       </div>
       <button type="button" class="icon-btn" id="settings-close" aria-label="Закрыть">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
@@ -522,6 +528,48 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         </div>
       </form>
     </div>
+
+    <!-- --- Вкладка «Голос и данные» --- -->
+    <form class="settings-body tab-panel" id="data-form" data-panel="data" hidden novalidate>
+      <h3 class="set-section">🎙 Голосовой ввод</h3>
+      <label class="toggle">
+        <input type="checkbox" id="v-enabled">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Кнопка микрофона в поле ввода</span>
+      </label>
+      <p class="hint">Речь распознаёт Whisper прямо на этом компьютере (на процессоре — видеопамять занята языковой моделью).
+        Звук никуда не отправляется. Модель скачается один раз при первой записи.</p>
+      <div class="field-grid">
+        <div class="field">
+          <label for="v-model">Модель распознавания</label>
+          <select id="v-model"></select>
+        </div>
+        <div class="field">
+          <label for="v-language">Язык речи</label>
+          <select id="v-language">
+            <option value="ru">Русский</option>
+            <option value="en">Английский</option>
+            <option value="auto">Определять самому (чуть медленнее)</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint" id="v-status"></p>
+
+      <h3 class="set-section">💾 Экспорт</h3>
+      <p class="hint">Все диалоги одним архивом: папка Markdown-файлов (удобно читать и класть в Obsidian)
+        и conversations.json со всеми данными. Отдельный диалог — кнопка ⤓ у диалога в списке слева.</p>
+      <div class="kb-row">
+        <a class="btn" href="/api/export/all" download>Скачать все диалоги (.zip)</a>
+      </div>
+      <p class="hint">Все ваши данные лежат в папке <code>data/</code> проекта: база диалогов, памяти и настроек,
+        копии загруженных документов, датасет, модель распознавания речи. Резервная копия — просто скопируйте эту папку.</p>
+
+      <p class="form-error" id="data-error" hidden></p>
+      <div class="settings-actions">
+        <button type="button" class="btn" id="data-cancel">Отмена</button>
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
 
     <!-- --- Вкладка «Инструменты» --- -->
     <form class="settings-body tab-panel" id="tools-form" data-panel="tools" hidden novalidate>

@@ -23,6 +23,8 @@ from .llm import get_backend
 from .memory.router import router as memory_router
 from .tools.router import router as tools_router
 from .training.router import router as training_router
+from .export.router import router as export_router
+from .voice.router import router as voice_router
 from .settings.personas import ensure_builtin as ensure_builtin_personas
 from .settings.router import router as settings_router
 from .system.router import router as system_router
@@ -50,6 +52,8 @@ app.include_router(knowledge_router)
 app.include_router(tools_router)
 app.include_router(dataset_router)
 app.include_router(training_router)
+app.include_router(voice_router)
+app.include_router(export_router)
 
 # Статика монтируется ПОСЛЕДНЕЙ: всё, что не /api/..., отдаётся как файлы интерфейса.
 # html=True — по адресу "/" отдаётся index.html.

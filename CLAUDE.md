@@ -141,4 +141,11 @@
       анализ датасета + zip-пакет (dataset без дублей, notebook, config.json с эпохами по размеру),
       подключение к Ollama: sha256 → /api/blobs → /api/create с template/parameters от qwen3:8b
       (иначе пропадут tools/thinking), adapter-режим (from + adapters), quantize q4_K_M для f16
-- [ ] Этап 8: полировка (Whisper, экспорт диалогов, запуск одной командой, README)
+- [x] Этап 8: голос — faster-whisper на CPU (int8, small, beam 1, VAD), модель скачивается один раз
+      в data/models/whisper; своё decode_audio через PyAV (faster-whisper 1.2 падает на PyAV 14+ из-за
+      metadata_errors); MediaRecorder webm/opus → текст в поле ввода (не автоотправка). Экспорт: диалог в
+      MD/JSON, архив всех. scripts/launcher.py (только stdlib до старта): pip по хэшу requirements,
+      ensurepip, «уже запущен», запуск Ollama, предложение скачать модели (отказ от bge-m3 запоминается),
+      порт занят. start.bat/start.sh — только venv. Итоговый README
+
+Все 8 этапов готовы.

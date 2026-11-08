@@ -18,6 +18,9 @@
    - `node tests/e2e/tools.js` — этап 5: инструменты, подтверждения, поиск (через поддельный SearXNG);
    - `node tests/e2e/dataset.js` — этап 6: 👍/👎, исправления, страница «Датасет», экспорт;
    - `node tests/e2e/training.js` — этап 7: пакет для Colab, подключение модели к Ollama;
+   - `node tests/e2e/polish.js` — этап 8: голосовой ввод (поддельный микрофон) и экспорт.
+     Сервер для него — `python tests/e2e/serve_fake_voice.py` (заглушка Whisper, но запись
+     из браузера декодируется по-настоящему);
    - `node tests/e2e/ollama_down.js` — при остановленном эмуляторе.
 
 Скриншоты сохраняются в `tests/e2e/screenshots/`.

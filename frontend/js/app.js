@@ -19,6 +19,7 @@ import {
 } from "./chat.js";
 import { initDatasetPage, refreshDatasetPage } from "./dataset.js";
 import { initTrainingPage, refreshTrainingPage } from "./training.js";
+import { initVoice } from "./voice.js";
 import { initKnowledgePage, refreshKnowledgePage } from "./knowledge.js";
 import { initMemoryPage, refreshMemoryPage } from "./memory.js";
 import { initSettings } from "./settings.js";
@@ -526,6 +527,21 @@ input.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (!state.abortController) sendMessage(input.value);
   }
+});
+
+// Голосовой ввод: распознанный текст вставляем туда, где стоит курсор (не отправляем сразу —
+// распознавание иногда ошибается, пусть пользователь проверит)
+initVoice({
+  onText: (text) => {
+    const { selectionStart: start, selectionEnd: end, value } = input;
+    const before = value.slice(0, start);
+    const glue = before && !/\s$/.test(before) ? " " : "";
+    input.value = before + glue + text + value.slice(end);
+    const cursor = (before + glue + text).length;
+    input.setSelectionRange(cursor, cursor);
+    autoResize();
+    input.focus();
+  },
 });
 
 $("composer").addEventListener("submit", (e) => {
