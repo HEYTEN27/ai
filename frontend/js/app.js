@@ -17,6 +17,7 @@ import {
   setMemoryLookup,
   setPersonaLookup,
 } from "./chat.js";
+import { initDatasetPage, refreshDatasetPage } from "./dataset.js";
 import { initKnowledgePage, refreshKnowledgePage } from "./knowledge.js";
 import { initMemoryPage, refreshMemoryPage } from "./memory.js";
 import { initSettings } from "./settings.js";
@@ -244,6 +245,7 @@ setMemoryLookup((id) => state.memoryById.get(id));
 const PAGES = {
   memory: { hash: "#/memory", view: "memory-view", button: "memory-btn", refresh: () => refreshMemoryPage() },
   knowledge: { hash: "#/knowledge", view: "knowledge-view", button: "knowledge-btn", refresh: () => refreshKnowledgePage() },
+  dataset: { hash: "#/dataset", view: "dataset-view", button: "dataset-btn", refresh: () => refreshDatasetPage() },
 };
 
 function showPage(name) {
@@ -278,6 +280,8 @@ function showChatView() {
 
 $("memory-btn").addEventListener("click", () => showPage("memory"));
 $("knowledge-btn").addEventListener("click", () => showPage("knowledge"));
+$("dataset-btn").addEventListener("click", () => showPage("dataset"));
+initDatasetPage();
 
 function pageFromHash() {
   return Object.keys(PAGES).find((name) => PAGES[name].hash === location.hash) || null;

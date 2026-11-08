@@ -139,6 +139,12 @@ export const api = {
   confirmTool: (id, approved) => request("POST", `/api/tools/confirm/${id}`, { approved }),
   checkFolder: (path) => request("GET", `/api/tools/files/check?path=${encodeURIComponent(path)}`),
 
+  rateMessage: (messageId, rating) => request("POST", "/api/dataset/feedback", { message_id: messageId, rating }),
+  correctMessage: (messageId, corrected) => request("POST", "/api/dataset/correct", { message_id: messageId, corrected }),
+  dataset: (filter = "all") => request("GET", `/api/dataset?filter=${filter}`),
+  updateExample: (id, data) => request("PATCH", `/api/dataset/${id}`, data),
+  deleteExample: (id) => request("DELETE", `/api/dataset/${id}`),
+
   sendMessage: (id, body, onEvent, signal) =>
     streamSSE(`/api/conversations/${id}/messages`, body, onEvent, signal),
   regenerate: (id, body, onEvent, signal) =>

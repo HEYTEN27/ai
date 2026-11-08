@@ -45,12 +45,14 @@ def build_messages(
     for message in reversed(history):
         if message["role"] not in ("user", "assistant"):
             continue
-        cost = estimate_tokens(message["content"])
+        # Если пользователь исправил ответ ассистента (этап 6) — модель видит исправленную версию
+        content = message.get("corrected") or message["content"]
+        cost = estimate_tokens(content)
         # Последний вопрос пользователя берём всегда, даже если он один не влезает:
         # Ollama сама обрежет начало, а без вопроса отвечать не на что.
         if selected and cost > budget:
             break
-        selected.append({"role": message["role"], "content": message["content"]})
+        selected.append({"role": message["role"], "content": content})
         budget -= cost
 
     selected.reverse()

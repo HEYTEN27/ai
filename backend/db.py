@@ -172,6 +172,30 @@ MIGRATIONS: list[str] = [
     -- Какую часть базы знаний использовать в диалоге: all | off | <id коллекции>
     ALTER TABLE conversations ADD COLUMN kb_scope TEXT NOT NULL DEFAULT 'all';
     """,
+    # --- Миграция 5 (этап 6): датасет для дообучения ---
+    """
+    -- Пример для обучения — СНИМОК: системный промпт, предыдущие сообщения, вопрос, ответ.
+    -- Снимок не зависит от диалога: удалите диалог — пример останется в датасете.
+    CREATE TABLE dataset_examples (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        message_id       INTEGER UNIQUE REFERENCES messages(id) ON DELETE SET NULL,  -- ответ в чате
+        conversation_id  TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+        rating           INTEGER NOT NULL DEFAULT 0 CHECK (rating IN (-1, 0, 1)),  -- 👎 / нет / 👍
+        system_prompt    TEXT NOT NULL DEFAULT '',
+        history          TEXT NOT NULL DEFAULT '[]',  -- JSON: предыдущие сообщения [{role, content}]
+        question         TEXT NOT NULL,               -- вопрос (с фрагментами базы знаний, если были)
+        answer           TEXT NOT NULL,               -- исходный ответ модели
+        corrected        TEXT,                        -- ответ, исправленный пользователем
+        used_tools       INTEGER NOT NULL DEFAULT 0,  -- в ответе участвовали инструменты
+        strip_citations  INTEGER NOT NULL DEFAULT 0,  -- ссылки [1] вести некуда — вырезать при экспорте
+        included         INTEGER NOT NULL DEFAULT 1,  -- пользователь может исключить пример вручную
+        model            TEXT,
+        persona          TEXT,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+    );
+    CREATE INDEX idx_dataset_rating ON dataset_examples(rating);
+    """,
 ]
 
 

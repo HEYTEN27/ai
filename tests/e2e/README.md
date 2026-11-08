@@ -16,6 +16,7 @@
    - `node tests/e2e/memory.js` — этап 3: запоминание, отмена, страница «Память»;
    - `node tests/e2e/knowledge.js` — этап 4: загрузка, папка Obsidian, ссылки на источники;
    - `node tests/e2e/tools.js` — этап 5: инструменты, подтверждения, поиск (через поддельный SearXNG);
+   - `node tests/e2e/dataset.js` — этап 6: 👍/👎, исправления, страница «Датасет», экспорт;
    - `node tests/e2e/ollama_down.js` — при остановленном эмуляторе.
 
 Скриншоты сохраняются в `tests/e2e/screenshots/`.

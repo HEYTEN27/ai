@@ -100,11 +100,20 @@ def delete_conversation(conv_id: str) -> bool:
 
 
 def list_messages(conv_id: str) -> list[dict]:
+    """Сообщения диалога. К ответам добавляем оценку 👍/👎 и исправление из датасета."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM messages WHERE conversation_id = ? ORDER BY id", (conv_id,)
+            """SELECT m.*, d.rating AS rating, d.corrected AS corrected
+               FROM messages m LEFT JOIN dataset_examples d ON d.message_id = m.id
+               WHERE m.conversation_id = ? ORDER BY m.id""",
+            (conv_id,),
         ).fetchall()
-    return [_message_to_dict(r) for r in rows]
+    result = []
+    for r in rows:
+        item = _message_to_dict(r)
+        item["rating"] = item.get("rating") or 0
+        result.append(item)
+    return result
 
 
 def add_message(

@@ -2,6 +2,7 @@
 // Отрисовка сообщений в окне чата.
 // =====================================================================
 
+import { api } from "./api.js";
 import { copyText, enhanceCodeBlocks, renderMarkdown } from "./markdown.js";
 import { openSource } from "./knowledge.js";
 import { describeEvent, plural } from "./memory.js";
@@ -23,6 +24,9 @@ export function setMemoryLookup(fn) {
 const ICONS = {
   copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
   retry: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+  like: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3Zm0 0 4-8a3 3 0 0 1 3 3v4h5.5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.1 21H7"/></svg>',
+  dislike: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3Zm0 0-4 8a3 3 0 0 1-3-3v-4H4.5a2 2 0 0 1-2-2.3l1.4-8A2 2 0 0 1 5.9 3H17"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
 };
 
 /** Прокручен ли чат почти до конца? Если пользователь листает вверх — не дёргаем его. */
@@ -88,6 +92,11 @@ export function createAssistantMessage({ onRetry } = {}) {
       <span class="meta-text"></span>
       <button class="icon-btn btn-copy" type="button" title="Копировать ответ">${ICONS.copy}</button>
       <button class="icon-btn btn-retry" type="button" title="Ответить заново" hidden>${ICONS.retry}</button>
+      <span class="feedback" hidden>
+        <button class="icon-btn btn-like" type="button" title="Хороший ответ — сохранить в датасет для обучения" aria-pressed="false">${ICONS.like}</button>
+        <button class="icon-btn btn-dislike" type="button" title="Плохой ответ" aria-pressed="false">${ICONS.dislike}</button>
+        <button class="icon-btn btn-edit" type="button" title="Исправить ответ — исправленная версия станет примером для обучения">${ICONS.edit}</button>
+      </span>
     </div>`;
   messagesEl().append(msg);
 
@@ -95,6 +104,13 @@ export function createAssistantMessage({ onRetry } = {}) {
   const thinkingBody = msg.querySelector(".thinking-body");
   const contentEl = msg.querySelector(".content");
   const toolsEl = msg.querySelector(".tool-cards");
+  const feedbackEl = msg.querySelector(".feedback");
+  // Датасет (этап 6): оценка и исправление этого ответа
+  let messageId = null;
+  let rating = 0;
+  let corrected = null;
+  let showingOriginal = false;
+  let lastSources = [];
   const toolCards = new Map(); // id вызова → карточка
   const metaEl = msg.querySelector(".msg-meta");
   const retryBtn = msg.querySelector(".btn-retry");
@@ -117,11 +133,113 @@ export function createAssistantMessage({ onRetry } = {}) {
     });
   }
 
+  /** Текст, который сейчас показан: исправленный (если есть и не включён «оригинал») или исходный. */
+  const shownText = () => (corrected && !showingOriginal ? corrected : content);
+
+  function renderBody() {
+    contentEl.innerHTML = renderMarkdown(shownText());
+    enhanceCodeBlocks(contentEl, { highlight: true });
+    if (lastSources.length) linkifyCitations(contentEl, lastSources);
+  }
+
   msg.querySelector(".btn-copy").addEventListener("click", (e) => {
-    copyText(content);
+    copyText(shownText());
     e.currentTarget.title = "Скопировано";
   });
   retryBtn.addEventListener("click", () => onRetry?.());
+
+  // ---------- 👍 / 👎 / «Исправить» ----------
+
+  function updateFeedbackUI() {
+    const like = feedbackEl.querySelector(".btn-like");
+    const dislike = feedbackEl.querySelector(".btn-dislike");
+    like.classList.toggle("active", rating === 1);
+    dislike.classList.toggle("active", rating === -1);
+    like.setAttribute("aria-pressed", String(rating === 1));
+    dislike.setAttribute("aria-pressed", String(rating === -1));
+    feedbackEl.querySelector(".btn-edit").classList.toggle("active", Boolean(corrected));
+    renderCorrectionNote();
+  }
+
+  /** «✏️ Исправлено вами · показать оригинал» — над строкой с моделью и кнопками. */
+  function renderCorrectionNote() {
+    msg.querySelector(".correction-note")?.remove();
+    if (!corrected) return;
+    const note = document.createElement("div");
+    note.className = "correction-note";
+    note.append(showingOriginal ? "Показан исходный ответ модели · " : "✏️ Исправлено вами — эта версия попадёт в датасет · ");
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "link-btn small";
+    toggle.textContent = showingOriginal ? "показать исправленный" : "показать оригинал";
+    toggle.addEventListener("click", () => {
+      showingOriginal = !showingOriginal;
+      renderBody();
+      renderCorrectionNote();
+    });
+    note.append(toggle);
+    metaEl.before(note);
+  }
+
+  async function sendRating(value) {
+    const newRating = rating === value ? 0 : value; // повторный клик снимает оценку
+    try {
+      const r = await api.rateMessage(messageId, newRating);
+      rating = r.example?.rating ?? 0;
+      corrected = r.example?.corrected ?? null;
+    } catch (e) {
+      alert(e.message);
+    }
+    updateFeedbackUI();
+  }
+
+  function openEditor() {
+    if (msg.querySelector(".correct-box")) return;
+    const box = document.createElement("div");
+    box.className = "correct-box";
+    box.innerHTML = `
+      <p class="hint">Напишите, каким должен быть ответ. Исправленная версия станет примером для обучения,
+        а модель будет видеть её в этом диалоге.</p>
+      <textarea spellcheck="true" aria-label="Исправленный ответ"></textarea>
+      <div class="correct-actions">
+        <button type="button" class="link-btn small btn-uncorrect" hidden>Убрать исправление</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-cancel">Отмена</button>
+        <button type="button" class="btn btn-primary btn-save">Сохранить</button>
+      </div>`;
+    const textarea = box.querySelector("textarea");
+    textarea.value = corrected || content;
+    textarea.rows = Math.min(20, Math.max(6, textarea.value.split("\n").length + 1));
+    box.querySelector(".btn-uncorrect").hidden = !corrected;
+    const close = () => box.remove();
+    const save = async (value) => {
+      try {
+        const r = await api.correctMessage(messageId, value);
+        corrected = r.example?.corrected ?? null;
+        rating = r.example?.rating ?? 0;
+      } catch (e) {
+        alert(e.message);
+        return;
+      }
+      showingOriginal = false;
+      close();
+      renderBody();
+      updateFeedbackUI();
+    };
+    box.querySelector(".btn-cancel").addEventListener("click", close);
+    box.querySelector(".btn-save").addEventListener("click", () => save(textarea.value));
+    box.querySelector(".btn-uncorrect").addEventListener("click", () => save(""));
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") close();
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) save(textarea.value); // Ctrl+Enter — сохранить
+    });
+    metaEl.after(box);
+    textarea.focus();
+  }
+
+  feedbackEl.querySelector(".btn-like").addEventListener("click", () => sendRating(1));
+  feedbackEl.querySelector(".btn-dislike").addEventListener("click", () => sendRating(-1));
+  feedbackEl.querySelector(".btn-edit").addEventListener("click", openEditor);
 
   return {
     element: msg,
@@ -164,13 +282,12 @@ export function createAssistantMessage({ onRetry } = {}) {
         content = message.content ?? content;
         thinking = message.thinking ?? thinking;
       }
-      contentEl.innerHTML = renderMarkdown(content);
-      enhanceCodeBlocks(contentEl, { highlight: true });
       const srcList = sources ?? message?.extras?.sources ?? [];
-      if (srcList.length) {
-        linkifyCitations(contentEl, srcList);
-        renderSources(msg, metaEl, srcList);
-      }
+      lastSources = srcList;
+      corrected = message?.corrected ?? corrected;
+      rating = message?.rating ?? rating;
+      renderBody();
+      if (srcList.length) renderSources(msg, metaEl, srcList);
       if (thinking) {
         thinkingEl.hidden = false;
         thinkingEl.open = false;
@@ -204,6 +321,12 @@ export function createAssistantMessage({ onRetry } = {}) {
         errEl.textContent = error;
         msg.append(errEl);
       }
+      // Оценивать можно только сохранённый ответ (у него есть id)
+      if (message?.id && content) {
+        messageId = message.id;
+        feedbackEl.hidden = false;
+        updateFeedbackUI();
+      }
       scrollToBottom();
     },
 
@@ -211,7 +334,6 @@ export function createAssistantMessage({ onRetry } = {}) {
       retryBtn.hidden = !visible;
     },
 
-    /** Под ответом: «💾 Запомнил: «…» · Отменить». onUndo(event) возвращает обновлённое событие. */
     /** Модель вызвала инструмент — показываем карточку «выполняю…». */
     toolStart(entry) {
       if (msg.classList.contains("streaming-wait")) contentEl.innerHTML = ""; // убираем «Думаю…»
@@ -237,6 +359,7 @@ export function createAssistantMessage({ onRetry } = {}) {
       card.setResult(entry);
     },
 
+    /** Под ответом: «💾 Запомнил: «…» · Отменить». onUndo(event) возвращает обновлённое событие. */
     showMemoryEvents(events, onUndo) {
       if (!events?.length) return;
       let box = msg.querySelector(".memory-notes");

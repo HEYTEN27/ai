@@ -550,7 +550,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   display: flex; flex-direction: column; gap: 10px; min-width: 0;
 }
 .kb-card h3 { margin: 0; font-size: 15px; }
-.kb-card input:not([type=file]), .kb-card select {
+.kb-card input:not([type=file]):not([type=radio]):not([type=checkbox]), .kb-card select {
   width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 9px;
   padding: 8px 10px; outline: none; min-width: 0;
 }
@@ -707,3 +707,58 @@ a.btn { text-decoration: none; }
 #t-root-status.ok { color: var(--ok); }
 #t-root-status.bad { color: var(--danger); }
 .tools-disabled .tool-setting { opacity: .45; pointer-events: none; }
+
+/* =====================================================================
+   Этап 6: датасет
+   ===================================================================== */
+
+/* Кнопки 👍 👎 ✏️ под ответом */
+.feedback { display: inline-flex; gap: 2px; margin-left: 6px; padding-left: 6px; border-left: 1px solid #333; }
+.feedback[hidden] { display: none; }
+.feedback .icon-btn.active { color: var(--accent); background: rgba(124, 156, 255, .12); }
+.feedback .btn-dislike.active { color: var(--danger); background: rgba(248, 113, 113, .12); }
+.correction-note { font-size: 12.5px; color: var(--text-muted); margin-top: 6px; }
+.correct-box { margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: #1c1c1c; display: flex; flex-direction: column; gap: 8px; }
+.correct-box textarea {
+  width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 9px;
+  padding: 10px 12px; outline: none; resize: vertical; line-height: 1.5; font-size: 14px;
+}
+.correct-box textarea:focus { border-color: var(--accent); }
+.correct-actions { display: flex; gap: 8px; align-items: center; }
+
+/* Страница «Датасет» */
+.main.show-dataset .messages, .main.show-dataset .composer, .main.show-dataset .banner,
+.main.show-dataset .persona-picker, .main.show-dataset .model-picker, .main.show-dataset #think-toggle-wrap { display: none; }
+.dataset-view { flex: 1; overflow-y: auto; padding: 8px 16px 40px; }
+.dataset-view[hidden] { display: none; }
+
+.ds-progress-card { border: 1px solid var(--border); border-radius: 14px; padding: 14px; background: #1c1c1c; margin-bottom: 14px; }
+.ds-progress-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.ds-progress-head b { font-size: 20px; }
+.ds-target { color: var(--text-faint); font-size: 13px; }
+.ds-bar { height: 8px; border-radius: 4px; background: #2b2b2b; overflow: hidden; margin-bottom: 8px; }
+.ds-bar span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.ds-export { margin-bottom: 16px; }
+.ds-export-row { display: flex; gap: 8px 18px; flex-wrap: wrap; }
+#ds-files { overflow-wrap: anywhere; min-width: 0; }
+#ds-download { white-space: nowrap; flex-shrink: 0; }
+
+.ds-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.ds-filter { background: transparent; border: 1px solid var(--border); border-radius: 16px; padding: 4px 12px; font-size: 13px; color: var(--text-muted); }
+.ds-filter:hover { color: var(--text); }
+.ds-filter.active { background: var(--bg-active); color: var(--text); border-color: #555; }
+
+.ds-item { border: 1px solid #2c2c2c; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+.ds-item.excluded { opacity: .6; }
+.ds-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-faint); margin-bottom: 6px; }
+.ds-badge { padding: 1px 8px; border-radius: 10px; background: #2b2b2b; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.ds-badge.in { background: rgba(74, 222, 128, .14); color: var(--ok); }
+.ds-badge.out { background: rgba(251, 191, 36, .12); color: var(--warn); }
+.ds-q { font-weight: 600; margin-bottom: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ds-a { color: var(--text-muted); font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9em; overflow: hidden; }
+.ds-a.corrected { color: var(--text); border-left: 2px solid var(--accent); padding-left: 10px; }
+.ds-a-label { font-size: 12px; color: var(--text-faint); margin: 8px 0 2px; }
+.ds-item-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+.ds-item-actions .btn { padding: 4px 10px; font-size: 13px; }
+.ds-edit textarea { width: 100%; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; outline: none; resize: vertical; margin-top: 4px; }
+.ds-edit textarea:focus { border-color: var(--accent); }

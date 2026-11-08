@@ -129,4 +129,9 @@
       подтверждение ВСЕГДА), run_python (subprocess + audit hook: без сети/subprocess/ctypes/файлов
       вне песочницы, таймаут, rlimit на POSIX; подтверждение по умолчанию). Подтверждения —
       asyncio.Future + SSE tool_confirm + POST /api/tools/confirm/{id}. Карточки в extras.tools
-- [ ] Этап 6: датасет (👍/👎, «исправить ответ», JSONL)
+- [x] Этап 6: датасет (миграция №5: dataset_examples — снимок system/history/question/answer,
+      corrected, rating, used_tools, strip_citations, included; message_id SET NULL — пример
+      переживает удаление диалога). В SFT: 👍 или исправленные, не 👎-без-исправления, без
+      инструментов по умолчанию; RAG-фрагменты в вопросе или вырезка [n]. DPO: chosen=corrected,
+      rejected=answer. Исправление подменяет ответ в контексте. Файлы data/dataset/train_{sft,dpo}.jsonl
+- [ ] Этап 7: дообучение (Colab + Unsloth QLoRA fp16 → GGUF → Ollama)
