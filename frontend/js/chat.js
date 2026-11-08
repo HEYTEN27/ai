@@ -82,6 +82,7 @@ export function createAssistantMessage({ onRetry } = {}) {
   msg.className = "msg msg-assistant";
   msg.innerHTML = `
     <details class="thinking" hidden><summary>Размышления</summary><div class="thinking-body"></div></details>
+    <div class="tool-cards"></div>
     <div class="content"></div>
     <div class="msg-meta" hidden>
       <span class="meta-text"></span>
@@ -93,6 +94,8 @@ export function createAssistantMessage({ onRetry } = {}) {
   const thinkingEl = msg.querySelector(".thinking");
   const thinkingBody = msg.querySelector(".thinking-body");
   const contentEl = msg.querySelector(".content");
+  const toolsEl = msg.querySelector(".tool-cards");
+  const toolCards = new Map(); // id вызова → карточка
   const metaEl = msg.querySelector(".msg-meta");
   const retryBtn = msg.querySelector(".btn-retry");
 
@@ -156,6 +159,7 @@ export function createAssistantMessage({ onRetry } = {}) {
      */
     finish({ message, stopped = false, error = null, memoryFacts = null, sources = null } = {}) {
       msg.classList.remove("streaming", "streaming-wait");
+      for (const card of toolCards.values()) card.cancel(); // незавершённые инструменты — «остановлено»
       if (message) {
         content = message.content ?? content;
         thinking = message.thinking ?? thinking;
@@ -208,6 +212,31 @@ export function createAssistantMessage({ onRetry } = {}) {
     },
 
     /** Под ответом: «💾 Запомнил: «…» · Отменить». onUndo(event) возвращает обновлённое событие. */
+    /** Модель вызвала инструмент — показываем карточку «выполняю…». */
+    toolStart(entry) {
+      if (msg.classList.contains("streaming-wait")) contentEl.innerHTML = ""; // убираем «Думаю…»
+      const card = createToolCard(entry);
+      toolCards.set(entry.id, card);
+      toolsEl.append(card.element);
+      scrollToBottom();
+    },
+
+    /** Нужно подтверждение: в карточке появляются кнопки. onAnswer(approved) отправляет ответ. */
+    toolConfirm(entry, onAnswer) {
+      toolCards.get(entry.id)?.askConfirm(entry, onAnswer);
+      scrollToBottom(true);
+    },
+
+    toolResult(entry) {
+      let card = toolCards.get(entry.id);
+      if (!card) {
+        card = createToolCard(entry);
+        toolCards.set(entry.id, card);
+        toolsEl.append(card.element);
+      }
+      card.setResult(entry);
+    },
+
     showMemoryEvents(events, onUndo) {
       if (!events?.length) return;
       let box = msg.querySelector(".memory-notes");
@@ -280,6 +309,187 @@ function renderSources(msg, metaEl, sources) {
   metaEl.before(box);
 }
 
+// =====================================================================
+// Карточки инструментов
+// =====================================================================
+
+const STATUS_TEXT = {
+  running: "выполняю…", waiting: "ждёт вашего решения", ok: "готово", error: "ошибка",
+  declined: "отклонено", cancelled: "остановлено",
+};
+
+/** Вопрос в карточке подтверждения — человеческими словами. */
+function confirmQuestion(entry) {
+  const a = entry.arguments || {};
+  switch (entry.name) {
+    case "read_file": return `Прочитать файл «${a.path}» из вашей папки?`;
+    case "list_files": return `Посмотреть список файлов в «${a.path || "."}»${a.recursive ? " (со вложенными папками)" : ""}?`;
+    case "run_python": return "Запустить этот код в песочнице?";
+    case "web_search": return `Искать в интернете: «${a.query}»? Запрос уйдёт поисковику.`;
+    case "open_url": return `Открыть страницу ${a.url}?`;
+    default: return `Выполнить «${entry.title}»?`;
+  }
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function pre(text, extra = "") {
+  return el("pre", `t-out ${extra}`.trim(), text);
+}
+
+function codeBlock(code) {
+  const box = el("div");
+  box.innerHTML = renderMarkdown("```python\n" + code + "\n```");
+  enhanceCodeBlocks(box, { highlight: true });
+  return box;
+}
+
+function createToolCard(entry) {
+  // Статус — классом с префиксом st- (класс «waiting» уже занят индикатором «Думаю…»)
+  const card = el("div", "tool-card st-running");
+  card.dataset.tool = entry.name;
+  card.dataset.status = "running";
+  const head = el("div", "tool-head");
+  head.append(el("span", "t-icon", entry.icon || "🛠️"), el("span", "t-title", entry.title || entry.name));
+  const summary = el("span", "t-summary", entry.summary || "");
+  summary.title = entry.summary || "";
+  const status = el("span", "t-status", STATUS_TEXT.running);
+  head.append(summary, status);
+  card.append(head);
+
+  const setStatus = (name) => {
+    card.className = `tool-card st-${name}`;
+    card.dataset.status = name;
+    status.textContent = STATUS_TEXT[name];
+  };
+
+  return {
+    element: card,
+
+    askConfirm(e, onAnswer) {
+      setStatus("waiting");
+      const box = el("div", "tool-confirm");
+      box.append(el("p", "", confirmQuestion(e)));
+      if (e.name === "run_python") box.append(codeBlock(e.arguments?.code || ""));
+      const actions = el("div", "t-actions");
+      const allow = el("button", "btn btn-primary", "Разрешить");
+      const deny = el("button", "btn", "Отклонить");
+      allow.type = deny.type = "button";
+      const answer = async (approved) => {
+        allow.disabled = deny.disabled = true;
+        const ok = await onAnswer(approved);
+        if (ok) {
+          box.remove();
+          setStatus(approved ? "running" : "declined");
+        } else {
+          allow.disabled = deny.disabled = false;
+        }
+      };
+      allow.addEventListener("click", () => answer(true));
+      deny.addEventListener("click", () => answer(false));
+      actions.append(allow, deny);
+      box.append(actions);
+      card.append(box);
+      allow.focus();
+    },
+
+    /** Ответ остановили, пока инструмент выполнялся или ждал решения. */
+    cancel() {
+      if (!["running", "waiting"].includes(card.dataset.status)) return;
+      card.querySelector(".tool-confirm")?.remove();
+      setStatus("cancelled");
+    },
+
+    setResult(e) {
+      card.querySelector(".tool-confirm")?.remove();
+      setStatus(e.status);
+      if (e.duration && e.status === "ok") status.textContent = `готово · ${e.duration} с`;
+      // Калькулятор показываем прямо в строке: «(2+3)^2 = 25»
+      if (e.name === "calculator" && e.status === "ok") {
+        summary.textContent = `${e.display.expression} = ${e.display.result}`;
+        return;
+      }
+      const body = renderToolBody(e);
+      if (!body) return;
+      const details = el("details", "tool-body");
+      details.append(el("summary", "", e.status === "ok" ? "Результат" : "Подробности"), body);
+      if (e.status === "error") details.open = true;
+      card.append(details);
+    },
+  };
+}
+
+/** Содержимое карточки после выполнения — своё для каждого инструмента. */
+function renderToolBody(e) {
+  const box = el("div", "tool-inner");
+  const d = e.display || {};
+  if (e.status === "declined") {
+    box.append(el("span", "t-label", "Вы отклонили это действие — ассистент ответил без него."));
+    if (e.name === "run_python" && e.arguments?.code) box.append(codeBlock(e.arguments.code));
+    return box;
+  }
+  if (e.status === "error") {
+    box.append(pre(d.error || "Неизвестная ошибка", "t-err"));
+    return box;
+  }
+  switch (e.name) {
+    case "web_search": {
+      const list = el("ul", "t-results");
+      for (const r of d.results || []) {
+        const li = el("li");
+        const a = el("a", "", r.title || r.url);
+        a.href = r.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        li.append(a, el("div", "t-url", r.url), el("div", "t-snippet", r.snippet));
+        list.append(li);
+      }
+      if (!d.results?.length) box.append(el("span", "t-label", "Ничего не найдено."));
+      box.append(list);
+      break;
+    }
+    case "open_url": {
+      const a = el("a", "", d.title || d.url);
+      a.href = d.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      const list = el("ul", "t-results");
+      const li = el("li");
+      li.append(a, el("div", "t-url", d.url));
+      list.append(li);
+      box.append(list, pre(d.content + (d.truncated ? "\n…" : "")));
+      break;
+    }
+    case "list_files": {
+      const ul = el("ul", "t-files");
+      for (const entry of d.entries || []) ul.append(el("li", "", entry.path));
+      box.append(el("span", "t-label", `Папка: ${d.path}`), ul);
+      if (d.truncated) box.append(el("span", "t-label", "Показана часть списка."));
+      break;
+    }
+    case "read_file":
+      box.append(el("span", "t-label", `${d.path} · ${d.chars} символов${d.truncated ? " · модель получила начало файла" : ""}`),
+        pre(d.content + (d.chars > (d.content || "").length ? "\n…" : "")));
+      break;
+    case "run_python":
+      box.append(codeBlock(d.code || ""));
+      if (d.stdout) box.append(el("span", "t-label", "Вывод"), pre(d.stdout));
+      if (d.stderr) box.append(el("span", "t-label", "Ошибки"), pre(d.stderr, "t-err"));
+      if (d.timed_out) box.append(el("span", "t-label", "Код не уложился в лимит времени и был остановлен."));
+      if (d.files?.length) box.append(el("span", "t-label", `Созданные файлы (удалены вместе с песочницей): ${d.files.map((f) => f.name).join(", ")}`));
+      box.append(el("span", "t-label", `Код завершения: ${d.exit_code} · ${d.duration} с`));
+      break;
+    default:
+      box.append(pre(JSON.stringify(d, null, 2)));
+  }
+  return box;
+}
+
 const NOTE_ICONS = { add: "💾", update: "✏️", delete: "🗑️" };
 
 function memoryNote(ev, onUndo) {
@@ -326,6 +536,7 @@ export function renderHistory(messages, { onRetry, memoryEvents = [], onUndoMemo
       addUserMessage(m.content);
     } else if (m.role === "assistant") {
       lastAssistant = createAssistantMessage({ onRetry });
+      for (const entry of m.extras?.tools || []) lastAssistant.toolResult(entry); // карточки инструментов
       lastAssistant.finish({ message: m });
       lastAssistant.showMemoryEvents(eventsByMessage.get(m.id), onUndoMemory);
     }

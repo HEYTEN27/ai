@@ -38,12 +38,15 @@ def render(template: str, values: dict) -> str:
     return re.sub(pattern, lambda m: str(values.get(m.group(1), m.group(0))), template)
 
 
-def build_system_prompt(settings: dict, persona: dict | None, model: str, memory_block: str = "") -> str:
-    """Общий промпт + инструкция персоны + факты из долговременной памяти."""
+def build_system_prompt(settings: dict, persona: dict | None, model: str, memory_block: str = "",
+                        tools_block: str = "") -> str:
+    """Общий промпт + инструкция персоны + правила инструментов + факты из долговременной памяти."""
     values = {"name": settings["assistant_name"], "model": model, "date": today_text()}
     parts = [render(settings["system_prompt"], values).strip()]
     if persona and persona.get("prompt", "").strip():
         parts.append(render(persona["prompt"], values).strip())
+    if tools_block:
+        parts.append(tools_block)
     if memory_block:
         parts.append(memory_block)
     return "\n\n".join(p for p in parts if p)

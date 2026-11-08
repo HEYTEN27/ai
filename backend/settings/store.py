@@ -12,6 +12,7 @@
 """
 
 import json
+from pathlib import Path
 
 from ..config import settings as env
 from ..db import get_conn
@@ -70,6 +71,18 @@ def defaults() -> dict:
         # Считать эмбеддинги документов на видеокарте: в разы быстрее, но на время
         # индексации Ollama выгрузит основную модель из видеопамяти.
         "embedding_on_gpu": False,
+        # --- Инструменты (этап 5) ---
+        "tools_enabled": True,  # главный выключатель
+        "tool_calculator": True,
+        "tool_web": True,  # поиск и чтение страниц — единственное, что выходит в интернет
+        "tool_files": True,  # работает, только когда выбрана папка files_root
+        "tool_python": True,
+        "files_root": "",  # папка, из которой модели можно читать файлы (с подтверждением)
+        "python_timeout": 10,  # секунд на выполнение кода
+        "confirm_python": True,  # спрашивать перед запуском кода
+        "confirm_web": False,  # спрашивать перед поиском / открытием страницы
+        "web_provider": "duckduckgo",  # duckduckgo | searxng
+        "searxng_url": "",
     }
 
 
@@ -108,7 +121,8 @@ def _validate(key: str, value):
         value = float(value)
         if not 0 <= value <= 16:
             raise SettingsError("Занято другими программами: от 0 до 16 ГиБ")
-    elif key in ("memory_enabled", "memory_autosave", "embedding_on_gpu"):
+    elif key in ("memory_enabled", "memory_autosave", "embedding_on_gpu", "tools_enabled", "tool_calculator",
+                 "tool_web", "tool_files", "tool_python", "confirm_python", "confirm_web"):
         if not isinstance(value, bool):
             raise SettingsError("Ожидается да/нет (true/false)")
     elif key == "memory_budget_tokens":
@@ -135,6 +149,21 @@ def _validate(key: str, value):
         value = int(value)
         if not 0 <= value <= 1000:
             raise SettingsError("Перекрытие: от 0 до 1000 символов")
+    elif key == "files_root":
+        value = str(value).strip().strip('"')
+        if value and not Path(value).expanduser().is_dir():
+            raise SettingsError(f"Папка не найдена: {value}")
+    elif key == "python_timeout":
+        value = int(value)
+        if not 1 <= value <= 120:
+            raise SettingsError("Время на выполнение кода: от 1 до 120 секунд")
+    elif key == "web_provider":
+        if value not in ("duckduckgo", "searxng"):
+            raise SettingsError("Поисковик: duckduckgo или searxng")
+    elif key == "searxng_url":
+        value = str(value).strip().rstrip("/")
+        if value and not value.startswith(("http://", "https://")):
+            raise SettingsError("Адрес SearXNG должен начинаться с http:// или https://")
     elif key == "embedding_model":
         value = str(value).strip()
         if not value:

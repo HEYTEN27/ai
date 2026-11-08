@@ -20,6 +20,7 @@ from .knowledge.indexer import indexer
 from .knowledge.router import router as knowledge_router
 from .llm import get_backend
 from .memory.router import router as memory_router
+from .tools.router import router as tools_router
 from .settings.personas import ensure_builtin as ensure_builtin_personas
 from .settings.router import router as settings_router
 from .system.router import router as system_router
@@ -44,6 +45,7 @@ app.include_router(chat_router)
 app.include_router(settings_router)
 app.include_router(memory_router)
 app.include_router(knowledge_router)
+app.include_router(tools_router)
 
 # Статика монтируется ПОСЛЕДНЕЙ: всё, что не /api/..., отдаётся как файлы интерфейса.
 # html=True — по адресу "/" отдаётся index.html.

@@ -25,6 +25,7 @@ from .base import (
     LoadedModel,
     ModelInfo,
     kv_bytes_per_token,
+    normalize_tool_call,
     parse_parameter_size,
 )
 
@@ -140,6 +141,7 @@ class OllamaBackend(LLMBackend):
         think: bool | None = None,
         options: dict | None = None,
         format: dict | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncIterator[ChatChunk]:
         payload: dict = {
             "model": model,
@@ -154,6 +156,8 @@ class OllamaBackend(LLMBackend):
             payload["think"] = think
         if format is not None:
             payload["format"] = format  # Ollama ограничит ответ этой JSON-схемой
+        if tools:
+            payload["tools"] = tools  # модель сможет попросить вызвать инструмент
 
         try:
             async with self._client.stream("POST", "/api/chat", json=payload) as response:
@@ -174,6 +178,8 @@ class OllamaBackend(LLMBackend):
                         yield ChatChunk("thinking", message["thinking"])
                     if message.get("content"):
                         yield ChatChunk("content", message["content"])
+                    for call in message.get("tool_calls") or []:
+                        yield ChatChunk("tool_call", tool_call=normalize_tool_call(call))
 
                     if data.get("done"):
                         yield ChatChunk("done", stats=self._stats(data))

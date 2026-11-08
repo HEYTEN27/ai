@@ -61,6 +61,7 @@ def reset_state() -> None:
         loaded={},
         last_request=None,  # последний запрос ЧАТА (с ответом пользователю)
         last_extraction=None,  # последний служебный запрос памяти (с format = JSON-схема)
+        chat_requests=[],  # все запросы чата по порядку (для проверки цикла инструментов)
         extraction_count=0,
         embed_calls=0,
         embed_available=True,  # False — эмулируем «bge-m3 не скачана»
@@ -138,7 +139,11 @@ async def chat(request: Request):
     if body.get("format"):
         return await _extraction(body)
     state["last_request"] = body
+    state["chat_requests"].append(body)
     name = body.get("model")
+    tool_reply = _tool_behaviour(body)
+    if tool_reply is not None:
+        return tool_reply
     if name not in MODELS:
         return JSONResponse({"error": f"model '{name}' not found, try pulling it first"}, status_code=404)
     model = MODELS[name]
@@ -274,3 +279,73 @@ async def test_config(request: Request):
 @app.get("/_test/state")
 async def test_state():
     return {k: v for k, v in state.items() if k != "loaded"}
+
+
+# ---------- инструменты (tool calling) ----------
+
+
+def _tool_call_for(question: str) -> list[dict]:
+    """Какие инструменты «решила» вызвать модель — по ключевым фразам в вопросе."""
+    low = question.lower()
+    if "два инструмента" in low:
+        return [{"name": "calculator", "arguments": {"expression": "2+2"}},
+                {"name": "calculator", "arguments": {"expression": "3*3"}}]
+    if m := re.search(r"посчитай (.+?)[?!.]?$", question, re.IGNORECASE | re.MULTILINE):
+        return [{"name": "calculator", "arguments": {"expression": m.group(1).strip()}}]
+    if m := re.search(r"найди в интернете (.+?)[?!.]?$", question, re.IGNORECASE | re.MULTILINE):
+        return [{"name": "web_search", "arguments": {"query": m.group(1).strip()}}]
+    if m := re.search(r"открой (https?://\S+)", question, re.IGNORECASE):
+        return [{"name": "open_url", "arguments": {"url": m.group(1)}}]
+    if "покажи файлы" in low:
+        return [{"name": "list_files", "arguments": {}}]
+    if m := re.search(r"прочитай файл (\S+)", question, re.IGNORECASE):
+        return [{"name": "read_file", "arguments": {"path": m.group(1).strip(".,!?")}}]
+    if "запусти код" in low and (m := re.search(r"```(?:python)?\n(.*?)```", question, re.DOTALL)):
+        return [{"name": "run_python", "arguments": {"code": m.group(1)}}]
+    return []
+
+
+def _tool_behaviour(body: dict):
+    """Ответ с вызовом инструмента или ответ по результату инструмента. None — обычный ответ."""
+    messages = body["messages"]
+    offered = {t["function"]["name"] for t in body.get("tools") or []}
+    last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+    tool_results = [m for m in messages if m["role"] == "tool"]
+
+    calls = []
+    if offered and "ЦИКЛ" in last_user:  # модель «зациклилась» и просит инструмент снова и снова
+        calls = [{"name": "calculator", "arguments": {"expression": "1+1"}}]
+    elif offered and messages[-1]["role"] == "user":
+        calls = [c for c in _tool_call_for(last_user) if c["name"] in offered]
+
+    if calls:
+        async def stream_calls():
+            yield json.dumps({"model": body["model"], "message": {"role": "assistant", "content": "Сейчас проверю. "}, "done": False}) + "\n"
+            yield json.dumps({"model": body["model"], "message": {"role": "assistant", "content": "", "tool_calls": [
+                {"function": c} for c in calls]}, "done": False}) + "\n"
+            yield json.dumps({"model": body["model"], "message": {"role": "assistant", "content": ""}, "done": True,
+                              "eval_count": 8, "eval_duration": 100_000_000}) + "\n"
+        return StreamingResponse(stream_calls(), media_type="application/x-ndjson")
+
+    if messages[-1]["role"] == "tool":
+        summary = " | ".join(m["content"].replace("\n", " ")[:150] for m in tool_results[-2:])
+        text = f"Готово. По данным инструмента: {summary}"
+        async def stream_answer():
+            for token in _tokens(text):
+                yield json.dumps({"model": body["model"], "message": {"role": "assistant", "content": token}, "done": False}) + "\n"
+                await asyncio.sleep(_delay())
+            yield json.dumps({"model": body["model"], "message": {"role": "assistant", "content": ""}, "done": True,
+                              "eval_count": len(text) // 4, "eval_duration": 500_000_000}) + "\n"
+        return StreamingResponse(stream_answer(), media_type="application/x-ndjson")
+    return None
+
+
+# ---------- поддельный SearXNG (чтобы проверять поиск без интернета) ----------
+
+
+@app.get("/searxng/search")
+async def fake_searxng(q: str, format: str = "json"):
+    return {"results": [
+        {"title": f"Результат про {q}", "url": "https://example.org/a", "content": f"Подробная статья: {q}."},
+        {"title": "Документация", "url": "https://docs.example.org/b", "content": "Официальная документация."},
+    ]}

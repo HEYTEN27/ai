@@ -122,4 +122,11 @@
       frontmatter, [[ссылки]]); нарезка по разделам с перекрытием; фоновая очередь индексации;
       гибридный поиск (вектор ≥ rag_min_score + FTS, RRF); фрагменты — в последнем сообщении
       (кэш Ollama не сбрасывается); ссылки [n] → источник, PDF #page=N; синхронизация папки
-- [ ] Этап 5: инструменты
+- [x] Этап 5: инструменты через нативный tool calling Ollama (tools в /api/chat, роль tool).
+      Цикл модель→инструмент→модель, ≤6 вызовов, затем запрос без tools. calculator (AST, без eval,
+      лимиты размера), web_search (DDG HTML / SearXNG) + open_url (защита от SSRF, проверка
+      редиректов), list_files/read_file (только внутри files_root, resolve+is_relative_to,
+      подтверждение ВСЕГДА), run_python (subprocess + audit hook: без сети/subprocess/ctypes/файлов
+      вне песочницы, таймаут, rlimit на POSIX; подтверждение по умолчанию). Подтверждения —
+      asyncio.Future + SSE tool_confirm + POST /api/tools/confirm/{id}. Карточки в extras.tools
+- [ ] Этап 6: датасет (👍/👎, «исправить ответ», JSONL)

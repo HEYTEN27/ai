@@ -246,6 +246,7 @@
       <div class="tabs" role="tablist">
         <button type="button" role="tab" class="tab active" data-tab="general" aria-selected="true">Основное</button>
         <button type="button" role="tab" class="tab" data-tab="personas" aria-selected="false">Персоны</button>
+        <button type="button" role="tab" class="tab" data-tab="tools" aria-selected="false">Инструменты</button>
       </div>
       <button type="button" class="icon-btn" id="settings-close" aria-label="Закрыть">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
@@ -385,6 +386,72 @@
         </div>
       </form>
     </div>
+
+    <!-- --- Вкладка «Инструменты» --- -->
+    <form class="settings-body tab-panel" id="tools-form" data-panel="tools" hidden novalidate>
+      <label class="toggle tool-master">
+        <input type="checkbox" id="t-enabled">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Разрешить ассистенту пользоваться инструментами</span>
+      </label>
+      <p class="hint" id="t-model-note">Модель сама решает, когда нужен инструмент. Работает с моделями, которые это умеют (qwen3, llama3.1).</p>
+
+      <div class="tool-setting">
+        <label class="toggle"><input type="checkbox" id="t-calculator"><span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">🧮 Калькулятор</span></label>
+        <p class="hint">Точные вычисления вместо счёта «в уме» — модели часто ошибаются в арифметике.</p>
+      </div>
+
+      <div class="tool-setting">
+        <label class="toggle"><input type="checkbox" id="t-web"><span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">🌐 Поиск в интернете и чтение страниц</span></label>
+        <p class="hint">Единственное, что выходит в интернет: поисковый запрос уходит поисковику. Страницы домашней сети и этого компьютера открывать нельзя.</p>
+        <div class="field-grid">
+          <div class="field">
+            <label for="t-provider">Поисковик</label>
+            <select id="t-provider">
+              <option value="duckduckgo">DuckDuckGo (без регистрации)</option>
+              <option value="searxng">Свой SearXNG</option>
+            </select>
+          </div>
+          <div class="field" id="t-searxng-field">
+            <label for="t-searxng">Адрес SearXNG</label>
+            <input id="t-searxng" placeholder="http://127.0.0.1:8888">
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="t-confirm-web"> Спрашивать перед каждым поиском</label>
+      </div>
+
+      <div class="tool-setting">
+        <label class="toggle"><input type="checkbox" id="t-files"><span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">📁 Чтение файлов из папки</span></label>
+        <p class="hint">Ассистент видит только эту папку (и вложенные). Каждое чтение вы подтверждаете кнопкой в чате.</p>
+        <div class="kb-row">
+          <input id="t-root" placeholder="C:\Users\имя\Documents\Учёба" spellcheck="false" aria-label="Папка для чтения файлов">
+          <button type="button" class="btn" id="t-root-check">Проверить</button>
+        </div>
+        <p class="hint" id="t-root-status"></p>
+      </div>
+
+      <div class="tool-setting">
+        <label class="toggle"><input type="checkbox" id="t-python"><span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">🐍 Python-песочница</span></label>
+        <p class="hint">Код запускается отдельным процессом во временной папке: без сети, без доступа к вашим файлам,
+          с ограничением по времени. Это защита от случайностей, но не от целенаправленной атаки — поэтому лучше подтверждать запуск.</p>
+        <div class="kb-row">
+          <label class="kb-label" for="t-timeout">Лимит времени, с</label>
+          <input id="t-timeout" type="number" min="1" max="120" class="t-timeout">
+          <span class="spacer"></span>
+        </div>
+        <label class="check"><input type="checkbox" id="t-confirm-python"> Спрашивать перед запуском кода</label>
+      </div>
+
+      <p class="form-error" id="tools-error" hidden></p>
+      <div class="settings-actions">
+        <button type="button" class="btn" id="tools-cancel">Отмена</button>
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
   </dialog>
 
   <script src="vendor/marked.min.js"></script>

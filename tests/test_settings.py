@@ -160,7 +160,8 @@ def test_custom_system_prompt_and_context(client):
     })
     _chat(client)
     system = _sent()["messages"][0]["content"]
-    assert system == "Я Пятница, работаю на qwen3:8b. JS: function f() { return {a: 1}; }"
+    assert system.startswith("Я Пятница, работаю на qwen3:8b. JS: function f() { return {a: 1}; }")
+    assert "У тебя есть инструменты" in system  # qwen3 умеет вызывать инструменты — к промпту добавлены правила
     assert _sent()["options"]["num_ctx"] == 16384
 
 

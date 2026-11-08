@@ -135,6 +135,10 @@ export const api = {
     return response.json();
   },
 
+  listTools: () => request("GET", "/api/tools"),
+  confirmTool: (id, approved) => request("POST", `/api/tools/confirm/${id}`, { approved }),
+  checkFolder: (path) => request("GET", `/api/tools/files/check?path=${encodeURIComponent(path)}`),
+
   sendMessage: (id, body, onEvent, signal) =>
     streamSSE(`/api/conversations/${id}/messages`, body, onEvent, signal),
   regenerate: (id, body, onEvent, signal) =>

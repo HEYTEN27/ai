@@ -25,6 +25,8 @@ HTTP API чата.
 
 import asyncio
 import json
+import time
+import uuid
 from contextlib import aclosing
 
 from fastapi import APIRouter, HTTPException
@@ -39,6 +41,8 @@ from ..memory import repository as memory_repo
 from ..memory.extraction import extract_and_apply
 from ..memory.retrieval import format_for_prompt, select_facts
 from ..settings import personas as personas_repo
+from ..tools import confirm as tool_confirm
+from ..tools import registry as tool_registry
 from ..settings import store as settings_store
 from . import repository as repo
 from .context import build_messages
@@ -48,6 +52,7 @@ router = APIRouter(prefix="/api/conversations", tags=["chat"])
 
 MAX_MESSAGE_CHARS = 100_000  # защита от случайной вставки гигантского текста
 MEMORY_WAIT_SECONDS = 90  # сколько ждать извлечения фактов, чтобы показать «Запомнил» в чате
+MAX_TOOL_CALLS = 6  # больше вызовов инструментов за один ответ не даём — защита от зацикливания
 
 # Ссылки на фоновые задачи извлечения памяти. Без них сборщик мусора Python
 # может удалить незавершённую задачу.
@@ -152,11 +157,14 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
     saved: dict = {}  # защита от двойного сохранения (например, «Стоп» пришёл после done)
     facts: list[dict] = []  # факты из памяти, подставленные в контекст
     sources: list[dict] = []  # фрагменты из базы знаний (для ссылок [1], [2])
+    tool_log: list[dict] = []  # какие инструменты вызывались — для карточек в чате
 
     def save(stopped: bool, stats: dict | None = None) -> dict | None:
         if "message" in saved:
             return saved["message"]
         content = "".join(content_parts)
+        if tool_log:
+            content = content.rstrip()  # разделитель после инструмента мог остаться последним
         thinking = "".join(thinking_parts)
         if not content and not thinking:
             return None  # нечего сохранять
@@ -166,6 +174,8 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             extras["memory_ids"] = [f["id"] for f in facts]
         if sources:
             extras["sources"] = sources
+        if tool_log:
+            extras["tools"] = tool_log
         saved["message"] = repo.add_message(
             conv_id, "assistant", content, thinking=thinking, model=model, stats=stats,
             stopped=stopped, persona_id=persona["id"], extras=extras or None,
@@ -213,11 +223,16 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
                 # к модели; в базе вопрос остаётся как есть
                 history = history[:-1] + [{**history[-1], "content": augment_question(history[-1]["content"], chunks)}]
 
+        # Инструменты — только если модель умеет их вызывать (qwen3, llama3.1 умеют)
+        tools = tool_registry.enabled_tools(settings) if (info is not None and info.supports_tools) else []
+        tools_by_name = {t.name: t for t in tools}
+
         options = generation_options(settings, persona)
         messages = build_messages(
             history,
             num_ctx=settings["num_ctx"],
-            system_prompt=build_system_prompt(settings, persona, model, format_for_prompt(facts)),
+            system_prompt=build_system_prompt(settings, persona, model, format_for_prompt(facts),
+                                              tool_registry.system_hint(tools)),
             # Если у персоны задан лимит длины ответа — столько и оставляем под ответ
             reserve_for_answer=options.get("num_predict"),
         )
@@ -225,22 +240,67 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
             "model": model, "think": bool(think_param), "persona_id": persona["id"],
             "memory": {"method": method, "facts": [{"id": f["id"], "content": f["content"]} for f in facts]},
             "knowledge": {"method": kb_method, "sources": sources},
+            "tools": [t.name for t in tools],
         })
 
+        # Цикл «модель → инструмент → модель». Обычно один проход: модель просто отвечает.
+        # Если она просит инструмент — выполняем его, добавляем результат в переписку
+        # (роль tool) и спрашиваем модель снова, пока она не ответит без инструментов.
         stats = None
-        # aclosing гарантирует, что поток к Ollama закроется, даже если браузер оборвал соединение
-        async with aclosing(
-            backend.chat_stream(model, messages, think=think_param, options=options)
-        ) as stream:
-            async for chunk in stream:
-                if chunk.kind == "thinking":
-                    thinking_parts.append(chunk.text)
-                    yield _sse("thinking", {"text": chunk.text})
-                elif chunk.kind == "content":
-                    content_parts.append(chunk.text)
-                    yield _sse("token", {"text": chunk.text})
-                elif chunk.kind == "done":
-                    stats = chunk.stats
+        while True:
+            # Лимит исчерпан — последний раз спрашиваем уже без инструментов, чтобы получить ответ
+            offer_tools = [t.schema() for t in tools] if len(tool_log) < MAX_TOOL_CALLS else None
+            step_text: list[str] = []
+            calls: list[dict] = []
+            # aclosing гарантирует, что поток к Ollama закроется, даже если браузер оборвал соединение
+            async with aclosing(
+                backend.chat_stream(model, messages, think=think_param, options=options, tools=offer_tools)
+            ) as stream:
+                async for chunk in stream:
+                    if chunk.kind == "thinking":
+                        thinking_parts.append(chunk.text)
+                        yield _sse("thinking", {"text": chunk.text})
+                    elif chunk.kind == "content":
+                        content_parts.append(chunk.text)
+                        step_text.append(chunk.text)
+                        yield _sse("token", {"text": chunk.text})
+                    elif chunk.kind == "tool_call":
+                        calls.append(chunk.tool_call)
+                    elif chunk.kind == "done":
+                        stats = chunk.stats
+
+            if not calls or not offer_tools:
+                break
+
+            # Запоминаем в переписке, что модель попросила инструменты
+            messages.append({"role": "assistant", "content": "".join(step_text),
+                             "tool_calls": [{"function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls]})
+            for call in calls[: MAX_TOOL_CALLS - len(tool_log)]:
+                entry = {"id": uuid.uuid4().hex[:12], "name": call["name"], "arguments": call["arguments"]}
+                tool = tools_by_name.get(call["name"])
+                entry.update(title=tool.title if tool else call["name"], icon=tool.icon if tool else "🛠️",
+                             summary=tool_registry.summarize_args(call["name"], call["arguments"]))
+                needs_confirm = bool(tool and tool.confirm(settings))
+                yield _sse("tool_start", {**entry, "needs_confirm": needs_confirm})
+
+                approved = True
+                if needs_confirm:
+                    tool_confirm.create(entry["id"])
+                    yield _sse("tool_confirm", entry)
+                    approved = await tool_confirm.wait(entry["id"])  # генерация ждёт кнопку в интерфейсе
+
+                started = time.monotonic()
+                if approved:
+                    status, result_text, display = await tool_registry.execute(call["name"], call["arguments"], settings)
+                else:
+                    status, result_text, display = "declined", "Пользователь отклонил это действие.", {}
+                entry.update(status=status, display=display, duration=round(time.monotonic() - started, 2))
+                tool_log.append(entry)
+                yield _sse("tool_result", entry)
+                messages.append({"role": "tool", "content": result_text, "tool_name": call["name"]})
+
+            if "".join(step_text).strip():
+                content_parts.append("\n\n")  # отделяем текст до инструмента от продолжения ответа
 
         message = save(stopped=False, stats=stats)
         yield _sse("done", {"message": message})

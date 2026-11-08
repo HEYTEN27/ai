@@ -16,7 +16,7 @@ from typing import AsyncIterator
 
 import httpx
 
-from .base import ChatChunk, LLMBackend, LLMError, ModelInfo
+from .base import ChatChunk, LLMBackend, LLMError, ModelInfo, normalize_tool_call
 
 TIMEOUT = httpx.Timeout(connect=5.0, read=300.0, write=30.0, pool=5.0)
 
@@ -61,8 +61,14 @@ class LlamaCppBackend(LLMBackend):
         think: bool | None = None,
         options: dict | None = None,
         format: dict | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncIterator[ChatChunk]:
         payload: dict = {"model": model, "messages": messages, "stream": True}
+        if tools:
+            payload["tools"] = tools  # формат описаний у Ollama и OpenAI одинаковый
+        # OpenAI-сервер присылает вызов инструмента кусками: имя, потом аргументы по частям.
+        # Собираем их по номеру вызова (index) и отдаём целиком в конце.
+        pending_calls: dict[int, dict] = {}
         if format is not None:
             # OpenAI-совместимый способ попросить ответ строго по JSON-схеме
             payload["response_format"] = {"type": "json_schema", "json_schema": {"name": "result", "schema": format}}
@@ -99,6 +105,11 @@ class LlamaCppBackend(LLMBackend):
                             yield ChatChunk("thinking", delta["reasoning_content"])
                         if delta.get("content"):
                             yield ChatChunk("content", delta["content"])
+                        for part in delta.get("tool_calls") or []:
+                            call = pending_calls.setdefault(part.get("index", 0), {"name": "", "arguments": ""})
+                            fn = part.get("function") or {}
+                            call["name"] += fn.get("name") or ""
+                            call["arguments"] += fn.get("arguments") or ""
                         if choice.get("finish_reason"):
                             stats["done_reason"] = choice["finish_reason"]
         except httpx.ConnectError as e:
@@ -107,6 +118,8 @@ class LlamaCppBackend(LLMBackend):
             raise LLMError("llama-server слишком долго не отвечает.") from e
         except httpx.HTTPError as e:
             raise LLMError(f"Обрыв связи с llama-server: {e}") from e
+        for index in sorted(pending_calls):
+            yield ChatChunk("tool_call", tool_call=normalize_tool_call({"function": pending_calls[index]}))
         yield ChatChunk("done", stats=stats)
 
     async def close(self) -> None:

@@ -96,7 +96,8 @@ async function send(page, text) {
   assert((await page.title()) === 'Пятница', 'новое имя применилось без перезагрузки');
   await send(page, 'Кто ты?');
   req = await lastRequest();
-  assert(req.messages[0].content === 'Ты Пятница. Отвечай кратко. Модель: qwen3:8b.', 'новый системный промпт с подстановками');
+  // После промпта идут правила инструментов (этап 5) — проверяем начало
+  assert(req.messages[0].content.startsWith('Ты Пятница. Отвечай кратко. Модель: qwen3:8b.'), 'новый системный промпт с подстановками');
   assert(req.options.num_ctx === 12288, 'контекст 12K ушёл в Ollama');
 
   // «Вернуть исходный» промпт

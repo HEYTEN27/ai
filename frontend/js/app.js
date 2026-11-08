@@ -439,6 +439,20 @@ async function streamAnswer(startRequest) {
       finished = true;
       bubble.finish({ message: data.partial, error: data.message, memoryFacts, sources });
       release();
+    } else if (event === "tool_start") {
+      bubble.toolStart(data);
+    } else if (event === "tool_confirm") {
+      bubble.toolConfirm(data, async (approved) => {
+        try {
+          await api.confirmTool(data.id, approved);
+          return true;
+        } catch (e) {
+          alert(e.message);
+          return false;
+        }
+      });
+    } else if (event === "tool_result") {
+      bubble.toolResult(data);
     } else if (event === "memory") {
       bubble.showMemoryEvents(data.events, undoMemoryEvent);
       loadMemoryCache();

@@ -96,12 +96,32 @@ class ChatChunk:
     kind:
       "thinking" — фрагмент «размышлений» модели (показываем в свёрнутом блоке)
       "content"  — фрагмент самого ответа
+      "tool_call" — модель просит вызвать инструмент (данные в tool_call)
       "done"     — генерация закончена, в stats лежит статистика
     """
 
-    kind: Literal["thinking", "content", "done"]
+    kind: Literal["thinking", "content", "tool_call", "done"]
     text: str = ""
     stats: dict | None = None
+    # Для kind="tool_call": модель просит вызвать инструмент {"name": "calculator", "arguments": {...}}
+    tool_call: dict | None = None
+
+
+def normalize_tool_call(raw: dict) -> dict:
+    """Приводит вызов инструмента к виду {"name": ..., "arguments": {...}}.
+
+    Ollama присылает аргументы объектом, OpenAI-совместимые серверы — строкой JSON.
+    """
+    import json
+
+    function = raw.get("function") or raw
+    args = function.get("arguments") or {}
+    if isinstance(args, str):
+        try:
+            args = json.loads(args) if args.strip() else {}
+        except json.JSONDecodeError:
+            args = {"_raw": args}  # модель прислала кривой JSON — покажем как есть
+    return {"name": function.get("name", ""), "arguments": args if isinstance(args, dict) else {"value": args}}
 
 
 def kv_bytes_per_token(model_info: dict) -> int | None:
@@ -163,6 +183,7 @@ class LLMBackend(ABC):
         think: bool | None = None,
         options: dict | None = None,
         format: dict | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncIterator[ChatChunk]:
         """Потоковая генерация ответа.
 
@@ -171,6 +192,8 @@ class LLMBackend(ABC):
         options  — параметры генерации: num_ctx, temperature и т.д.
         format   — JSON-схема: модель обязана ответить JSON-объектом такой структуры
                    (используется памятью, чтобы надёжно разбирать ответ программой).
+        tools    — описания инструментов (калькулятор, поиск...). Если модель решит вызвать
+                   инструмент, в потоке придёт ChatChunk(kind="tool_call").
         """
 
     async def complete(

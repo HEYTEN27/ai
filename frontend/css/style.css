@@ -427,6 +427,10 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   .model-picker select { font-size: 14px; max-width: 34vw; }
   .settings { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; margin: 0; }
   .settings-head { padding: 10px 12px 10px 16px; gap: 8px; }
+  /* Три вкладки не помещаются рядом с заголовком — на телефоне заголовок прячем, вкладки прокручиваются */
+  .settings-head h2#settings-title { display: none; }
+  .tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .tab { padding: 6px 10px; white-space: nowrap; }
   .settings-body { padding: 16px; }
   .settings-actions { bottom: -16px; margin: 0 -16px -16px; padding: 12px 16px 14px; }
   .field-grid, .sliders, .personas-panel { grid-template-columns: 1fr; }
@@ -645,3 +649,61 @@ a.btn { text-decoration: none; }
 }
 .btn-danger-text { color: var(--danger); }
 .btn-danger-text:hover { background: rgba(248, 113, 113, .1); }
+
+/* =====================================================================
+   Этап 5: инструменты
+   ===================================================================== */
+
+.tool-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.tool-cards:empty { display: none; }
+.tool-card { border: 1px solid #333; border-radius: 12px; background: #1b1b1b; overflow: hidden; font-size: 14px; }
+.tool-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; min-width: 0; }
+.tool-head .t-icon { font-size: 16px; }
+.tool-head .t-title { font-weight: 600; white-space: nowrap; }
+.tool-head .t-summary { flex: 1; min-width: 0; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 12.5px; }
+.tool-head .t-status { font-size: 12.5px; color: var(--text-faint); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.tool-card.st-running .t-status::before {
+  content: ""; width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--text-faint); border-top-color: var(--accent); animation: spin .8s linear infinite;
+}
+.tool-card.st-ok .t-status { color: var(--ok); }
+.tool-card.st-error .t-status { color: var(--danger); }
+.tool-card.st-declined .t-status, .tool-card.st-cancelled .t-status { color: var(--warn); }
+.tool-card.st-waiting { border-color: rgba(251, 191, 36, .55); box-shadow: 0 0 0 3px rgba(251, 191, 36, .08); }
+.tool-card.st-waiting .t-status { color: var(--warn); }
+
+.tool-confirm { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.tool-confirm p { margin: 0; color: var(--text); }
+.tool-confirm .t-actions { display: flex; gap: 8px; }
+.tool-confirm .btn { padding: 6px 14px; }
+
+.tool-body { border-top: 1px solid #2a2a2a; }
+.tool-body > summary { padding: 6px 12px; cursor: pointer; color: var(--text-muted); font-size: 12.5px; list-style: none; }
+.tool-body > summary::-webkit-details-marker { display: none; }
+.tool-body > summary::before { content: "▸ "; }
+.tool-body[open] > summary::before { content: "▾ "; }
+.tool-inner { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.tool-inner pre.t-out {
+  margin: 0; padding: 10px 12px; background: var(--bg-code); border-radius: 8px; border: 1px solid #262626;
+  white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12.5px; max-height: 320px; overflow: auto;
+  font-variant-ligatures: none;
+}
+.tool-inner pre.t-err { color: #fca5a5; }
+.tool-inner .t-label { font-size: 12px; color: var(--text-faint); }
+.tool-inner .code-block { margin: 0; }
+.t-results { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.t-results a { color: var(--accent); text-decoration: none; font-weight: 500; }
+.t-results a:hover { text-decoration: underline; }
+.t-results .t-url { font-size: 12px; color: var(--text-faint); word-break: break-all; }
+.t-results .t-snippet { font-size: 13px; color: var(--text-muted); }
+.t-files { margin: 0; padding-left: 18px; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted); }
+
+/* Вкладка «Инструменты» в настройках */
+.tool-master { margin-bottom: 6px; }
+.tool-setting { border: 1px solid #2c2c2c; border-radius: 12px; padding: 12px 14px; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; }
+.tool-setting .field { margin-bottom: 0; }
+.tool-setting .kb-row input { flex: 1; }
+.t-timeout { max-width: 90px; flex: 0 0 auto !important; }
+#t-root-status.ok { color: var(--ok); }
+#t-root-status.bad { color: var(--danger); }
+.tools-disabled .tool-setting { opacity: .45; pointer-events: none; }
