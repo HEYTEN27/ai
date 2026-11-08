@@ -356,6 +356,13 @@ body[data-core="speaking"] .tts-toggle { color: var(--accent); box-shadow: var(-
 [data-theme="hud"] .tts-bar { border-radius: 1px; background: rgba(63, 217, 255, .1); }
 [data-theme="hud"] .tts-bar-fill { box-shadow: 0 0 8px rgba(63, 217, 255, .7); }
 
+/* ---------- картинки (этап 13) ---------- */
+
+[data-theme="hud"] :is(.img-form, .img-install, .img-thumb) { border-radius: 3px; background: var(--panel); border-color: rgba(63, 217, 255, .22); }
+[data-theme="hud"] .img-thumb:hover { box-shadow: var(--glow); border-color: rgba(63, 217, 255, .6); }
+[data-theme="hud"] .img-lightbox { border-radius: 3px; border-color: rgba(63, 217, 255, .4); background: linear-gradient(180deg, rgba(4, 16, 28, .98), rgba(2, 8, 16, .98)); box-shadow: var(--glow); }
+[data-theme="hud"] .img-lightbox img { border-radius: 2px; }
+
 /* ---------- узкие экраны и «меньше анимаций» ---------- */
 
 @media (max-width: 768px) {

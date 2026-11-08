@@ -44,6 +44,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
           Датасет
         </button>
+        <button class="btn btn-nav" id="images-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+          Изображения
+        </button>
         <button class="btn btn-nav" id="training-btn" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/></svg>
           Обучение
@@ -295,6 +299,66 @@
       </section>
 
       <!-- ===== Страница «Обучение» ===== -->
+      <section class="page-view images-view" id="images-view" hidden aria-labelledby="images-title">
+        <div class="memory-inner">
+          <header class="memory-head">
+            <h1 id="images-title">Изображения</h1>
+            <p class="memory-sub">Stable Diffusion рисует прямо на вашей видеокарте, без интернета. На время рисования
+              языковая модель выгружается из видеопамяти — следующий ответ в чате будет на 5–10 секунд дольше.
+              В чате просто попросите: «нарисуй…».</p>
+          </header>
+
+          <section class="img-setup" id="img-setup">
+            <div class="img-install" id="img-install">
+              <p id="img-install-text"></p>
+              <div class="kb-row">
+                <button type="button" class="btn btn-primary" id="img-install-btn">Установить движок (≈ 3 ГБ)</button>
+              </div>
+              <pre class="img-log" id="img-log" hidden></pre>
+            </div>
+            <div class="img-models" id="img-models"></div>
+            <div class="tts-progress" id="img-dl" hidden>
+              <div class="tts-bar"><div class="tts-bar-fill" id="img-dl-fill"></div></div>
+              <span class="hint" id="img-dl-text"></span>
+            </div>
+            <div class="kb-row img-mirror-row" id="img-mirror-row">
+              <label class="kb-label" for="img-mirror">Откуда скачивать модели</label>
+              <select id="img-mirror">
+                <option value="huggingface">HuggingFace</option>
+                <option value="hf-mirror">Зеркало hf-mirror.com</option>
+              </select>
+            </div>
+          </section>
+
+          <form class="img-form" id="img-form">
+            <textarea id="img-prompt" rows="2" maxlength="1500"
+              placeholder="Что нарисовать? Например: рыжий кот на подоконнике на закате, акварель"></textarea>
+            <div class="img-form-row">
+              <select id="img-orientation" aria-label="Формат">
+                <option value="square">Квадрат</option>
+                <option value="portrait">Портрет</option>
+                <option value="landscape">Пейзаж</option>
+              </select>
+              <select id="img-count" aria-label="Сколько вариантов">
+                <option value="1">1 вариант</option>
+                <option value="2">2 варианта</option>
+                <option value="4">4 варианта</option>
+              </select>
+              <span class="spacer"></span>
+              <button type="submit" class="btn btn-primary" id="img-go">🎨 Нарисовать</button>
+            </div>
+            <div class="img-run" id="img-run" hidden>
+              <div class="tts-bar"><div class="tts-bar-fill" id="img-run-fill"></div></div>
+              <span class="hint" id="img-run-text"></span>
+              <button type="button" class="link-btn small" id="img-cancel">Остановить</button>
+            </div>
+            <p class="form-error" id="img-error" hidden></p>
+          </form>
+
+          <div class="img-gallery" id="img-gallery"></div>
+        </div>
+      </section>
+
       <section class="page-view training-view" id="training-view" hidden aria-labelledby="training-title">
         <div class="memory-inner">
           <header class="memory-head">
@@ -406,6 +470,25 @@ python training/train_local.py --dataset data/dataset/train_sft.jsonl</pre>
         <div class="drop-box">📎 Отпустите, чтобы прикрепить файлы<small>PDF, Word, Excel, PowerPoint, текст, код — до 25 МБ</small></div>
       </div>
     </main>
+
+    <!-- Просмотр картинки (этап 13) -->
+    <dialog class="img-lightbox" id="img-lightbox" aria-label="Картинка">
+      <div class="lb-body">
+        <img id="lb-image" alt="">
+        <div class="lb-info">
+          <p class="lb-request" id="lb-request"></p>
+          <p class="lb-prompt" id="lb-prompt"></p>
+          <p class="lb-meta" id="lb-meta"></p>
+          <div class="lb-actions">
+            <a class="btn btn-primary" id="lb-download" download>Скачать</a>
+            <button type="button" class="btn" id="lb-more">Ещё вариант</button>
+            <button type="button" class="btn" id="lb-copy">Копировать промпт</button>
+            <button type="button" class="btn btn-danger" id="lb-delete">Удалить</button>
+            <button type="button" class="btn" id="lb-close">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
 
     <!-- Панель артефактов (этап 10): игры, страницы, схемы — справа от чата -->
     <aside class="artifact-panel" id="artifact-panel" hidden aria-label="Артефакт">

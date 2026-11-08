@@ -113,6 +113,16 @@ async def ps():
     return {"models": list(state["loaded"].values())}
 
 
+@app.post("/api/generate")
+async def generate(request: Request):
+    """Только выгрузка модели (keep_alive = 0) — так ассистент освобождает видеопамять перед картинками."""
+    body = await request.json()
+    if body.get("keep_alive") == 0:
+        state["loaded"].pop(body.get("model"), None)
+        state["unloads"] = state.get("unloads", 0) + 1
+    return {"model": body.get("model"), "response": "", "done": True, "done_reason": "unload"}
+
+
 GAME_HTML = """<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8"><title>{title}</title>
 <style>body{{margin:0;background:#111;color:#eee;font:16px sans-serif}} canvas{{display:block;margin:10px auto;background:#222}}</style>
@@ -415,6 +425,11 @@ def _tool_call_for(question: str) -> list[dict]:
         return [{"name": "list_files", "arguments": {}}]
     if m := re.search(r"прочитай файл (\S+)", question, re.IGNORECASE):
         return [{"name": "read_file", "arguments": {"path": m.group(1).strip(".,!?")}}]
+    # --- картинки (этап 13) ---
+    if "нарисуй" in low and re.search(r"картин|изображен|кота|обои", low):
+        return [{"name": "generate_image", "arguments": {
+            "prompt": "a cute red cat sitting on a windowsill at sunset, digital art, highly detailed",
+            "orientation": "landscape" if "обои" in low else "square", "count": 2 if "два варианта" in low else 1}}]
     # --- документы (этап 9) ---
     if "в word" in low or "документ word" in low:
         topic = re.sub(r"(?i).*?(про|о|об)\s+", "", question.strip().splitlines()[0], count=1).strip(" .?!") or "тема"

@@ -31,6 +31,7 @@ initHud(); // ядро, часы — до загрузки данных, что�
 import { initKnowledgePage, refreshKnowledgePage } from "./knowledge.js";
 import { initMemoryPage, refreshMemoryPage } from "./memory.js";
 import { initLessons, refreshLessons } from "./lessons.js";
+import { initImagesPage, refreshImagesPage } from "./images.js";
 import { autoCheck, setCodeFixHandler } from "./coderun.js";
 import { initSettings } from "./settings.js";
 import { renderConversationList } from "./sidebar.js";
@@ -262,6 +263,7 @@ const PAGES = {
   knowledge: { hash: "#/knowledge", view: "knowledge-view", button: "knowledge-btn", refresh: () => refreshKnowledgePage() },
   dataset: { hash: "#/dataset", view: "dataset-view", button: "dataset-btn", refresh: () => refreshDatasetPage() },
   training: { hash: "#/training", view: "training-view", button: "training-btn", refresh: () => refreshTrainingPage() },
+  images: { hash: "#/images", view: "images-view", button: "images-btn", refresh: () => refreshImagesPage() },
 };
 
 function showPage(name) {
@@ -299,6 +301,8 @@ $("knowledge-btn").addEventListener("click", () => showPage("knowledge"));
 $("dataset-btn").addEventListener("click", () => showPage("dataset"));
 initDatasetPage();
 $("training-btn").addEventListener("click", () => showPage("training"));
+$("images-btn").addEventListener("click", () => showPage("images"));
+initImagesPage();
 // Новая модель подключена — обновляем список моделей вверху
 initTrainingPage({ onModelAdded: () => loadModels() });
 
@@ -510,6 +514,8 @@ async function streamAnswer(startRequest) {
           return false;
         }
       });
+    } else if (event === "tool_progress") {
+      bubble.toolProgress(data); // «Рисую: шаг 7 из 25»
     } else if (event === "tool_result") {
       bubble.toolResult(data);
     } else if (event === "memory") {

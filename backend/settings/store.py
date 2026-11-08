@@ -81,7 +81,9 @@ def defaults() -> dict:
         "auto_think": True,  # на сложных вопросах «размышления» включаются сами
         "auto_check_code": False,  # сам запускать Python-код из ответа в песочнице (проверка)
         "artifacts_enabled": True,  # игры, страницы, схемы в панели рядом с чатом (этап 10)
-        "tool_documents": True,  # создание Word, PowerPoint, Excel (файлы остаются внутри приложения)
+        "tool_documents": True,
+        "tool_images": True,  # рисование картинок (работает, когда движок установлен и модель скачана)
+        "image_model": "dreamshaper",  # модель для рисования (backend/images/catalog.py)  # создание Word, PowerPoint, Excel (файлы остаются внутри приложения)
         "files_root": "",  # папка, из которой модели можно читать файлы (с подтверждением)
         "python_timeout": 10,  # секунд на выполнение кода
         "confirm_python": True,  # спрашивать перед запуском кода
@@ -141,7 +143,7 @@ def _validate(key: str, value):
         if not 0 <= value <= 16:
             raise SettingsError("Занято другими программами: от 0 до 16 ГиБ")
     elif key in ("memory_enabled", "memory_autosave", "embedding_on_gpu", "tools_enabled", "tool_calculator",
-                 "tool_web", "tool_files", "tool_python", "tool_documents", "artifacts_enabled", "lessons_enabled", "auto_think", "auto_check_code", "confirm_python", "confirm_web", "voice_enabled",
+                 "tool_web", "tool_files", "tool_python", "tool_documents", "tool_images", "artifacts_enabled", "lessons_enabled", "auto_think", "auto_check_code", "confirm_python", "confirm_web", "voice_enabled",
                  "tts_enabled", "ui_sounds", "tts_effect"):
         if not isinstance(value, bool):
             raise SettingsError("Ожидается да/нет (true/false)")
@@ -193,6 +195,10 @@ def _validate(key: str, value):
             raise SettingsError("Обращение: от 1 до 30 символов (например, «сэр», «мисс», «босс»)")
     elif key == "tts_voice":
         value = str(value).strip()[:200]
+    elif key == "image_model":
+        from ..images.catalog import MODELS
+        if value not in MODELS:
+            raise SettingsError(f"Модель изображений: одна из {', '.join(MODELS)}")
     elif key == "tts_engine":
         if value not in ("neural", "system"):
             raise SettingsError("Движок озвучки: neural или system")

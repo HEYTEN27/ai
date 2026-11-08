@@ -193,5 +193,15 @@
       Тесты на голосе-пустышке tests/fake_piper.py (ONNX с интерфейсом Piper — путь через настоящий piper/espeak/onnxruntime);
       HuggingFace из контейнера недоступен, звучание настоящих голосов проверяет пользователь.
       Пользователь: «работать с моделями» = 3D-модели; голос — русский «британский дворецкий»
+- [x] Этап 13: картинки — backend/images. diffusers + PyTorch cu126 ставятся ПО КНОПКЕ (installer.py: pip в фоне
+      тем же python, лог в UI), не в requirements. Модели: dreamshaper (Lykon/dreamshaper-8, SD1.5, fp16, DPM++ 2M
+      Karras, attention slicing, 25 шагов) и sdxl-turbo (+ madebyollin/sdxl-vae-fp16-fix, model_cpu_offload, 4 шага,
+      guidance 0); snapshot_download (fp16-файлы, без safety_checker; фолбэк на полные веса), прогресс по размеру
+      папки, зеркало hf-mirror через endpoint. Перед рисованием LLMBackend.unload_all() (Ollama keep_alive=0), после —
+      pipe.to("cpu") + empty_cache (SDXL выгружается из ОЗУ). Generator на CPU (seed повторяем). Картинки — files
+      (generated, image/png, meta prompt/seed/…). Инструмент generate_image (промпт по-английски, orientation,
+      count ≤4) + tool_progress в SSE (чат опрашивает tool.progress раз в 0,5 с), «Стоп» → engine.cancel.
+      /api/images: status/install/download/generate(translate через LLM)/cancel/gallery. «Ещё вариант» дописывает в
+      extras карточки ответа. IMAGE_ENGINE=fake — заглушка (Pillow) для тестов; настоящий diffusers проверяет пользователь
 
-Этапы 1–12 готовы. Дальше по плану: 13 генерация изображений, 14 зрение, 15 проекты и удобство (+ 3D-модели).
+Этапы 1–13 готовы. Дальше по плану: 14 зрение, 15 проекты, удобство и 3D-модели.

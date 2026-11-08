@@ -27,6 +27,8 @@
    - `node tests/e2e/voice_neural.js` — этап 12: скачивание голоса, озвучка по предложениям во время ответа.
      Сервер для него — с адресом «HuggingFace» в эмуляторе: `PIPER_VOICES_URL=http://127.0.0.1:11434/_voices python -m backend`
      (голос-пустышка собирается из `tests/fake_piper.py`, нужен пакет onnx из requirements-dev.txt);
+   - `node tests/e2e/images.js` — этап 13: модель, рисование со страницы и в чате, прогресс, галерея.
+     Сервер — с движком-заглушкой: `IMAGE_ENGINE=fake FAKE_IMAGE_STEP=0.04 python -m backend`;
    - `node tests/e2e/hud.js` — интерфейс «Джарвис»: заставка, ядро, «…, сэр», озвучка
      (поддельный голос Windows), обращение, смена темы, телефон;
    - `node tests/e2e/ollama_down.js` — при остановленном эмуляторе.

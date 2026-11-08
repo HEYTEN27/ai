@@ -150,6 +150,15 @@ export const api = {
     return response.json();
   },
 
+  imagesStatus: () => request("GET", "/api/images/status"),
+  imagesInstall: (reinstall = false) => request("POST", "/api/images/install", { reinstall }),
+  imagesDownload: (model, mirror) => request("POST", "/api/images/download", { model, mirror }),
+  imagesDeleteModel: (model) => request("DELETE", `/api/images/models/${model}`),
+  imagesGenerate: (body) => request("POST", "/api/images/generate", body),
+  imagesCancel: () => request("POST", "/api/images/cancel"),
+  imagesGallery: () => request("GET", "/api/images/gallery"),
+  imagesDelete: (id) => request("DELETE", `/api/images/${id}`),
+
   ttsStatus: () => request("GET", "/api/voice/tts"),
   ttsDownload: (voice, mirror) => request("POST", "/api/voice/tts/download", { voice, mirror }),
   ttsDeleteVoice: (voice) => request("DELETE", `/api/voice/tts/voices/${voice}`),

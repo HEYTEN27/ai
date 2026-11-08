@@ -245,5 +245,18 @@ class OllamaBackend(LLMBackend):
             for m in r.json().get("models", [])
         ]
 
+    async def unload_all(self) -> list[str]:
+        """Выгрузить все модели из видеопамяти (перед генерацией картинок: вместе они в 8 ГБ не влезают).
+
+        В Ollama это пустой запрос /api/generate с keep_alive = 0. Следующий вопрос в чате
+        загрузит модель обратно (5–10 секунд)."""
+        try:
+            loaded = await self.loaded_models() or []
+            for m in loaded:
+                await self._client.post("/api/generate", json={"model": m.name, "keep_alive": 0})
+        except (httpx.HTTPError, LLMError):
+            return []  # Ollama не запущена — выгружать нечего
+        return [m.name for m in loaded]
+
     async def close(self) -> None:
         await self._client.aclose()

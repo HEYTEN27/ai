@@ -11,6 +11,7 @@ import { describeFile, fileIcon, formatSize } from "./attachments.js";
 import { enhanceArtifacts } from "./artifacts.js";
 import { learnAndShow } from "./lessons.js";
 import { addRunButtons } from "./coderun.js";
+import { imageResult, progressLine } from "./images.js";
 
 const messagesEl = () => document.getElementById("messages");
 
@@ -452,10 +453,15 @@ export function createAssistantMessage({ onRetry } = {}) {
     /** Модель вызвала инструмент — показываем карточку «выполняю…». */
     toolStart(entry) {
       if (msg.classList.contains("streaming-wait")) contentEl.innerHTML = ""; // убираем «Думаю…»
-      const card = createToolCard(entry);
+      const card = createToolCard(entry, { getMessageId: () => messageId });
       toolCards.set(entry.id, card);
       toolsEl.append(card.element);
       scrollToBottom();
+    },
+
+    /** Прогресс долгого инструмента (рисование): «Рисую: шаг 7 из 25». */
+    toolProgress(data) {
+      toolCards.get(data.id)?.setProgress(data);
     },
 
     /** Нужно подтверждение: в карточке появляются кнопки. onAnswer(approved) отправляет ответ. */
@@ -468,7 +474,7 @@ export function createAssistantMessage({ onRetry } = {}) {
       const stick = isNearBottom(); // проверяем ДО вставки: карточка документа высокая
       let card = toolCards.get(entry.id);
       if (!card) {
-        card = createToolCard(entry);
+        card = createToolCard(entry, { getMessageId: () => messageId });
         toolCards.set(entry.id, card);
         toolsEl.append(card.element);
       }
@@ -593,7 +599,7 @@ function codeBlock(code) {
   return box;
 }
 
-function createToolCard(entry) {
+function createToolCard(entry, { getMessageId } = {}) {
   // Статус — классом с префиксом st- (класс «waiting» уже занят индикатором «Думаю…»)
   const card = el("div", "tool-card st-running");
   card.dataset.tool = entry.name;
@@ -612,8 +618,18 @@ function createToolCard(entry) {
     status.textContent = STATUS_TEXT[name];
   };
 
+  let progress = null;
+
   return {
     element: card,
+
+    setProgress(p) {
+      if (!progress) {
+        progress = progressLine();
+        card.append(progress.element);
+      }
+      progress.set(p);
+    },
 
     askConfirm(e, onAnswer) {
       setStatus("waiting");
@@ -646,16 +662,24 @@ function createToolCard(entry) {
     cancel() {
       if (!["running", "waiting"].includes(card.dataset.status)) return;
       card.querySelector(".tool-confirm")?.remove();
+      progress?.element.remove();
       setStatus("cancelled");
     },
 
     setResult(e) {
       card.querySelector(".tool-confirm")?.remove();
+      progress?.element.remove();
+      progress = null;
       setStatus(e.status);
       if (e.duration && e.status === "ok") status.textContent = `готово · ${e.duration} с`;
       // Калькулятор показываем прямо в строке: «(2+3)^2 = 25»
       if (e.name === "calculator" && e.status === "ok") {
         summary.textContent = `${e.display.expression} = ${e.display.result}`;
+        return;
+      }
+      if (e.status === "ok" && e.display?.images) {
+        card.classList.add("has-images");
+        card.append(imageResult(e.display, { toolId: e.id, getMessageId }));
         return;
       }
       if (e.status === "ok" && e.display?.file) {

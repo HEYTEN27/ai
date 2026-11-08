@@ -14,6 +14,8 @@ from pathlib import Path
 _TMP = tempfile.mkdtemp(prefix="assistant-tests-")
 os.environ["DATA_DIR"] = _TMP
 os.environ["FAKE_DELAY"] = "0"
+os.environ["IMAGE_ENGINE"] = "fake"  # рисование — заглушкой (без видеокарты и PyTorch)
+os.environ["FAKE_IMAGE_STEP"] = "0.002"
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402

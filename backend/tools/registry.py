@@ -18,6 +18,7 @@ from typing import Awaitable, Callable
 
 from ..files import tools as doc_tools
 from ..files.docgen import DocError
+from ..images import engine as image_engine
 from . import calculator, files, sandbox, web
 
 MAX_RESULT_CHARS = 6_000  # результат для модели; больше — обрежем, иначе не влезет в контекст
@@ -35,6 +36,8 @@ class Tool:
     confirm: Callable[[dict], bool] = lambda s: False  # нужно ли подтверждение (по настройкам)
     online: bool = False  # выходит ли в интернет
     needs_context: bool = False  # run получает третьим аргументом контекст {conversation_id}
+    progress: Callable[[], dict | None] | None = None  # прогресс долгого инструмента (для карточки в чате)
+    cancel: Callable[[], None] | None = None  # остановить долгий инструмент («Стоп» в чате)
 
     def schema(self) -> dict:
         """Описание в формате, который понимают Ollama и OpenAI-совместимые серверы."""
@@ -104,6 +107,31 @@ async def _run_python(args: dict, settings: dict):
         parts.append("Созданные файлы: " + ", ".join(f["name"] for f in result["files"]))
     parts.append(f"Код завершения: {result['exit_code']}")
     return "\n\n".join(parts), {**result, "code": code}
+
+
+async def _run_generate_image(args: dict, settings: dict, ctx: dict):
+    from ..images import service
+
+    orientation = args.get("orientation") if args.get("orientation") in ("square", "portrait", "landscape") else "square"
+    try:
+        count = max(1, min(4, int(args.get("count") or 1)))
+    except (TypeError, ValueError):
+        count = 1
+    prompt = str(args.get("prompt") or "").strip()
+    if not prompt:
+        raise ValueError("Пустой промпт: опиши картинку в prompt (по-английски)")
+    result = await service.create(prompt, negative=(str(args.get("negative_prompt") or "").strip() or None),
+                                  orientation=orientation, count=count, conversation_id=ctx.get("conversation_id"))
+    n = len(result["images"])
+    text = (f"Нарисовано изображений: {n} за {result['seconds']} с (seed {result['seed']}). Пользователь видит их "
+            "в чате. Коротко скажи, что получилось, и предложи, что можно изменить (стиль, ракурс, детали). "
+            "Не вставляй ссылки и разметку картинок.")
+    return text, {"images": result["images"], "prompt": prompt, "seed": result["seed"], "model": result["model"],
+                  "orientation": orientation}
+
+
+def _image_progress():
+    return image_engine.engine.progress
 
 
 # ---------- сами инструменты ----------
@@ -201,6 +229,20 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
         }, ["filename", "sheets"]),
     ),
     Tool(
+        name="generate_image", title="Рисую", icon="🎨", setting="tool_images", run=_run_generate_image,
+        needs_context=True, progress=_image_progress, cancel=lambda: image_engine.engine.cancel(),
+        description=("Рисует картинку (Stable Diffusion на видеокарте пользователя). Используй, когда просят нарисовать, "
+                     "сгенерировать изображение, картинку, фото, арт, обои, иллюстрацию. prompt пиши ПО-АНГЛИЙСКИ и "
+                     "подробно: объект, детали, стиль (photo, digital art, watercolor, anime…), освещение, ракурс, "
+                     "«highly detailed». Схемы и диаграммы так не рисуй — для них есть ```mermaid."),
+        parameters=_params({
+            "prompt": {"type": "string", "description": "Подробное описание картинки на английском"},
+            "negative_prompt": {"type": "string", "description": "Чего не должно быть (по-английски), можно пусто"},
+            "orientation": {"type": "string", "enum": ["square", "portrait", "landscape"], "description": "Формат"},
+            "count": {"type": "integer", "description": "Сколько вариантов, 1–4 (по умолчанию 1)"},
+        }, ["prompt"]),
+    ),
+    Tool(
         name="edit_word_document", title="Правка Word", icon="✏️", setting="tool_documents",
         run=doc_tools.edit_word, needs_context=True,
         description=("Точечно правит .docx из этого диалога (прикреплённый пользователем или созданный тобой) с сохранением "
@@ -226,6 +268,10 @@ def availability(settings: dict) -> dict[str, str | None]:
             result[name] = "инструменты выключены"
         elif not settings[tool.setting]:
             result[name] = "выключен в настройках"
+        elif tool.setting == "tool_images" and not image_engine.is_installed():
+            result[name] = "движок рисования не установлен"
+        elif tool.setting == "tool_images" and not image_engine.is_downloaded(settings["image_model"]):
+            result[name] = "модель изображений не скачана"
         elif tool.setting == "tool_files" and not (settings["files_root"] and Path(settings["files_root"]).expanduser().is_dir()):
             result[name] = "не выбрана папка"
         else:
@@ -262,6 +308,8 @@ def summarize_args(name: str, args: dict) -> str:
            "list_files": "path", "read_file": "path"}.get(name)
     if key:
         return str(args.get(key) or ("." if name == "list_files" else ""))
+    if name == "generate_image":
+        return str(args.get("prompt") or "")[:120]
     if name in ("create_word_document", "create_spreadsheet"):
         return str(args.get("filename") or "")
     if name == "create_presentation":
@@ -292,5 +340,5 @@ async def execute(name: str, args: dict, settings: dict, context: dict | None = 
         else:
             text, display = await tool.run(args, settings)
         return "ok", text, display
-    except (calculator.CalcError, files.FileToolError, web.WebError, DocError, ValueError) as e:
+    except (calculator.CalcError, files.FileToolError, web.WebError, DocError, image_engine.ImageError, ValueError) as e:
         return "error", f"Ошибка: {e}", {"error": str(e)}

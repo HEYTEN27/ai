@@ -333,8 +333,21 @@ async def _generate_answer(conv_id: str, model: str, think: bool):
 
                 started = time.monotonic()
                 if approved:
-                    status, result_text, display = await tool_registry.execute(
-                        call["name"], call["arguments"], settings, {"conversation_id": conv_id})
+                    # Инструмент выполняется отдельной задачей: пока он работает (картинка рисуется
+                    # десятки секунд), шлём в чат его прогресс — «Рисую: шаг 7 из 25»
+                    job = asyncio.create_task(tool_registry.execute(
+                        call["name"], call["arguments"], settings, {"conversation_id": conv_id}))
+                    try:
+                        while not job.done():
+                            await asyncio.wait({job}, timeout=0.5)
+                            if not job.done() and tool and tool.progress and (p := tool.progress()):
+                                yield _sse("tool_progress", {"id": entry["id"], **p})
+                    except (asyncio.CancelledError, GeneratorExit):
+                        if tool and tool.cancel:
+                            tool.cancel()  # «Стоп» — останавливаем и сам инструмент (рисование)
+                        job.cancel()
+                        raise
+                    status, result_text, display = job.result()
                 else:
                     status, result_text, display = "declined", "Пользователь отклонил это действие.", {}
                 entry.update(status=status, display=display, duration=round(time.monotonic() - started, 2))
