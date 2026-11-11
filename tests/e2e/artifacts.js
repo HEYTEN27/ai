@@ -102,7 +102,7 @@ async function artifactFrame(page) {
   await send(page, 'Сделай 3d сцену');
   frame = await artifactFrame(page);
   await frame.waitForFunction(() => window.threeOk === true);
-  assert((await frame.title()) === 'Куб 149', 'Three.js подключён локально (без интернета)');
+  assert((await frame.title()) === 'Куб 147', 'Three.js подключён локально (без интернета)');
   assert(await page.$('#ap-bars .fix-bar') === null, 'никаких предупреждений');
 
   // --- Сеть из артефакта заблокирована ---

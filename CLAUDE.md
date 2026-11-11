@@ -171,7 +171,7 @@
       стрима «пишу код…», «код оборвался» при незакрытом ```), панель справа (просмотр/код, версии по одинаковому
       title, перезапуск, весь экран, скачать, ширина тянется), iframe sandbox="allow-scripts …" БЕЗ allow-same-origin
       + CSP meta (connect-src 'none'), перехват ошибок → postMessage с токеном → «🛠 Исправить» (номер строки
-      пересчитывается назад после вставки), CDN-ссылки Three.js r149/Chart.js 4 → локальная копия из
+      пересчитывается назад после вставки), CDN-ссылки Three.js (локально r147)/Chart.js 4 → локальная копия из
       vendor/artifact-libs; Mermaid 10 (vendor, грузится лениво, securityLevel strict); SVG — через <img> (скрипты не идут)
 - [x] Этап 11: «умнее и обучаемее». Миграция №7: lessons (content, source correction|feedback|manual, enabled).
       POST /api/lessons/learn: 👎 с быстрой причиной без текста → готовое правило без модели (wrong/offtopic → нет
@@ -222,5 +222,14 @@
       ветку по leaf_id=ответ. Проекты: инструкции в системный промпт, файлы проекта (≤8) в блок вложений;
       картинки в проект нельзя. Поиск: /api/search ("слово"* AND, snippet с \u0001/\u0002 → <mark>, + названия).
       Стили (chat/styles.py) — приписка к промпту. UI: проекты, Ctrl+K, ✏️ и «‹ 1/2 ›», стиль у поля ввода
+- [x] Этап 15б: 3D-модели. Three.js в vendor/artifact-libs переведён на r147 (последняя версия с examples/js) +
+      three-addons.js (OrbitControls, STL/OBJ/GLTF Exporter и Loader) + свой kit3d.js: сцена, свет, сетка, авто-подгонка
+      камеры, модель «на стол», размеры Ш×Г×В, функции box/cylinder/sphere/cone/torus/move/rotate/scale/color/add и CSG
+      union/subtract/intersect (BSP по мотивам csg.js), экспорт STL (копия повёрнута +90° по X → Z вверх), OBJ, GLB —
+      через postMessage родителю (у песочницы нет права скачивать). Артефакт ```3d («// title: …» — название),
+      make3dPage: код модели в отдельном <script> + __kitFinish, номер строки ошибки минус offset обёртки. Вложения
+      STL/OBJ/GLB: files/model3d.py (numpy: двоичный/ASCII STL, OBJ с n-угольниками и отрицательными индексами, GLB
+      accessors, glTF в метрах → мм) → текст для контекста (габариты, треугольники, объём, PLA), просмотрщик по клику
+      (__kitWaitFile ← байты от родителя; STL поворот −90° по X, пересчёт нормалей)
 
-Этапы 1–15а готовы. Дальше: 15б — 3D-модели (по подтверждению пользователя).
+Этапы 1–15б готовы — весь план выполнен.

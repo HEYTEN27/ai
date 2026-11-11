@@ -23,17 +23,25 @@ ARTIFACTS_HINT = """\
 Для 3D можно подключить <script src="three.js"></script> (глобальный THREE), для графиков — \
 <script src="chart.js"></script> (глобальный Chart); других библиотек нет. Код запустится в панели рядом \
 с чатом. В играх покажи на экране управление и счёт, сделай рестарт. Схемы и диаграммы — в блоке ```mermaid, \
-векторные рисунки — в блоке ```svg. При любой правке присылай код целиком, а не кусками. До кода — одна \
-фраза, после — коротко, что умеет и как управлять."""
+векторные рисунки — в блоке ```svg. 3D-модели (для 3D-печати, Blender) — в блоке ```3d: первая строка \
+«// title: Название», дальше JavaScript с готовыми функциями (размеры в мм, детали создаются по центру): \
+box(ширина, высота, глубина), cylinder(r, h), sphere(r), cone(r, h), torus(R, r); move(o, x, y, z), \
+rotate(o, градусыX, градусыY, градусыZ); union(a, b), subtract(a, b) — вырезать отверстие или паз, intersect(a, b); \
+add(o) — добавить в модель (обязательно). Пример: add(subtract(box(60, 20, 40), cylinder(8, 30))). \
+Модель сама встанет на стол, у пользователя будут кнопки экспорта STL/OBJ/GLB. При любой правке присылай код \
+целиком, а не кусками. До кода — одна фраза, после — коротко, что умеет и как управлять."""
 
 # ```html … ``` (закрывающих кавычек может не быть — ответ оборвался)
-FENCE = re.compile(r"```(html|svg|mermaid)[^\n]*\n(.*?)(?:\n```|\Z)", re.DOTALL | re.IGNORECASE)
+FENCE = re.compile(r"```(html|svg|mermaid|3d)[^\n]*\n(.*?)(?:\n```|\Z)", re.DOTALL | re.IGNORECASE)
 HTML_DOCUMENT = re.compile(r"<!doctype|<html|<body|<canvas|<script", re.IGNORECASE)
 
 
 def artifact_title(lang: str, code: str) -> str:
     """Название артефакта — так же, как его определяет интерфейс (frontend/js/artifacts.js)."""
     lang = lang.lower()
+    if lang == "3d":
+        m = re.search(r"^\s*//\s*(?:title|название)\s*:\s*(.{1,120})$", code, re.IGNORECASE | re.MULTILINE)
+        return m.group(1).strip() if m else "3D-модель"
     if lang in ("html", "svg"):
         m = re.search(r"<title[^>]*>([^<]{1,120})</title>", code, re.IGNORECASE)
         if m and m.group(1).strip():

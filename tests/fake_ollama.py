@@ -146,6 +146,16 @@ window.gameReady = true;
 def _artifact_answer(question: str) -> str | None:
     """Ответы с артефактами (этап 10) — по ключевым словам, как настоящая модель."""
     low = question.lower()
+    # --- 3D-модели (этап 15б) ---
+    if "3d-модель с ошибкой" in low:
+        return "Модель:\n\n```3d\n// title: Сломанная деталь\nconst base = box(40, 10, 40);\nadd(base);\nundefinedPart(5);\n```"
+    if "3d-модель" in low or "3d модель" in low:
+        code = ("// title: Подставка для ручек\n"
+                "const body = box(80, 40, 50);\n"
+                "const hole1 = move(cylinder(10, 50), -20, 10, 0);\n"
+                "const hole2 = move(cylinder(10, 50), 20, 10, 0);\n"
+                "add(subtract(body, hole1, hole2));")
+        return f"Вот подставка.\n\n```3d\n{code}\n```\n\nДва отверстия по 20 мм."
     if "код с ошибкой" in low:  # этап 11: «▶ Проверить» найдёт ошибку
         return "Вот код:\n\n```python\nitems = [1, 2, 3]\nprint(sum(items) / 0)\n```"
     if "исправь" in low and "выдал ошибку" in low:

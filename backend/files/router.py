@@ -17,8 +17,8 @@ from fastapi.responses import FileResponse, Response
 
 from ..chat import repository as chat_repo
 from ..projects import repository as projects_repo
-from . import docgen, store, vision
-from .extract import IMAGE_EXTENSIONS, MIME_TYPES, ExtractError, check_supported, extract_bytes, mime_for
+from . import docgen, model3d, store, vision
+from .extract import IMAGE_EXTENSIONS, MIME_TYPES, MODEL_EXTENSIONS, ExtractError, check_supported, extract_bytes, mime_for
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
@@ -67,6 +67,15 @@ async def upload(file: UploadFile = File(...), conversation_id: str | None = For
                                    conversation_id=conversation_id, meta=meta)
         store.write_extra(record, vision.VISION_NAME, jpeg)
         return record
+
+    # 3D-модель (этап 15б): считаем габариты, объём и расход пластика — это и есть «текст» для модели
+    if ext in MODEL_EXTENSIONS:
+        try:
+            text, meta = await asyncio.to_thread(model3d.analyze, data, name)
+        except model3d.ModelError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        return store.create_file(kind="upload", name=name, data=data, mime=mime_for(name),
+                                 conversation_id=conversation_id, text=text, meta=meta, project_id=project_id)
 
     try:
         # Разбор PDF на сотни страниц занимает секунды — в отдельном потоке, чтобы сервер не замирал

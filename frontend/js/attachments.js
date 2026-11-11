@@ -11,7 +11,8 @@ const MAX_FILES = 10;
 const MAX_BYTES = 25 * 1024 * 1024;
 export const ACCEPT = ".pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.tsv,.json,.xml,.yaml,.yml,.log,.html,.css,.js,.ts,.tsx,.jsx," +
   ".py,.java,.kt,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.swift,.sql,.sh,.bat,.ps1,.vue,.ini,.toml," +
-  ".png,.jpg,.jpeg,.webp,.gif,.bmp"; // картинки (этап 14) — их смотрит модель зрения
+  ".png,.jpg,.jpeg,.webp,.gif,.bmp," + // картинки (этап 14) — их смотрит модель зрения
+  ".stl,.obj,.glb"; // 3D-модели (этап 15б)
 
 /** @type {{key:number, file:File, status:'uploading'|'ready'|'error', record?:object, error?:string, promise:Promise}[]} */
 let items = [];
@@ -22,7 +23,7 @@ let onChange = () => {};
 export function fileIcon(name) {
   const ext = String(name).split(".").pop().toLowerCase();
   return { pdf: "📕", docx: "📝", doc: "📝", pptx: "📊", xlsx: "📗", csv: "📗", tsv: "📗", png: "🖼️", jpg: "🖼️",
-    jpeg: "🖼️", webp: "🖼️", gif: "🖼️", bmp: "🖼️" }[ext] || "📄";
+    jpeg: "🖼️", webp: "🖼️", gif: "🖼️", bmp: "🖼️", stl: "🧊", obj: "🧊", glb: "🧊" }[ext] || "📄";
 }
 
 /** Картинка или скан PDF — у таких вложений есть миниатюра. */
@@ -50,7 +51,10 @@ function plural(n, one, few, many) {
 export function describeFile(record) {
   const m = record.meta || {};
   const parts = [formatSize(record.size)];
-  if (m.type === "image") parts.push(`${m.width}×${m.height}`);
+  if (m.type === "model3d") {
+    const f = (x) => (Math.round(x * 10) / 10).toLocaleString("ru-RU");
+    parts.push(`${m.size_mm.map(f).join(" × ")} мм`, `${m.triangles.toLocaleString("ru-RU")} треуг.`);
+  } else if (m.type === "image") parts.push(`${m.width}×${m.height}`);
   else if (m.type === "scan") parts.push(`скан · ${m.pages} стр.`);
   else if (m.pages) parts.push(`${m.pages} стр.`);
   else if (m.slides) parts.push(plural(m.slides, "слайд", "слайда", "слайдов"));

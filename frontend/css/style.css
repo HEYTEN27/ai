@@ -1330,3 +1330,4 @@ img.ac-preview { max-width: 100%; max-height: 300px; margin: 0 auto; padding: 12
   .user-actions { opacity: 1; }
   .nav-kbd { display: none; }
 }
+.file-chip.is-model { cursor: pointer; font: inherit; text-align: left; }

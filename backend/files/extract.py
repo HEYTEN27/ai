@@ -30,7 +30,9 @@ TEXT_EXTENSIONS = {
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".pptx"}
 # Картинки (этап 14) — их «читает» модель зрения, а не парсер текста
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
-SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS | IMAGE_EXTENSIONS
+# 3D-модели (этап 15б): описание (размеры, объём) считает files/model3d.py
+MODEL_EXTENSIONS = {".stl", ".obj", ".glb"}
+SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS | IMAGE_EXTENSIONS | MODEL_EXTENSIONS
 
 OLD_OFFICE = {".doc": "docx", ".xls": "xlsx", ".ppt": "pptx"}
 
@@ -46,6 +48,9 @@ MIME_TYPES = {
     ".gif": "image/gif",
     ".webp": "image/webp",
     ".bmp": "image/bmp",
+    ".stl": "model/stl",
+    ".obj": "model/obj",
+    ".glb": "model/gltf-binary",
     ".json": "application/json",
     ".md": "text/markdown",
     ".html": "text/html",
@@ -81,7 +86,7 @@ def check_supported(name: str) -> None:
         raise ExtractError(f"Старый формат {ext} не поддерживается. Откройте файл в Office и сохраните "
                            f"как .{OLD_OFFICE[ext]} («Файл → Сохранить как»).")
     raise ExtractError(f"Формат {ext or 'без расширения'} не поддерживается. Подходят: PDF, DOCX, XLSX, PPTX, "
-                       "TXT, MD, CSV, файлы с кодом и картинки PNG, JPG, WEBP, GIF.")
+                       "TXT, MD, CSV, файлы с кодом, картинки PNG, JPG, WEBP, GIF и 3D-модели STL, OBJ, GLB.")
 
 
 def _finish(text: str, meta: dict) -> Extracted:

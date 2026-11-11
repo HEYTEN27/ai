@@ -8,7 +8,7 @@ import { copyText, enhanceCodeBlocks, renderMarkdown } from "./markdown.js";
 import { openSource } from "./knowledge.js";
 import { describeEvent, plural } from "./memory.js";
 import { describeFile, fileIcon, formatSize, hasPreview, previewUrl } from "./attachments.js";
-import { enhanceArtifacts } from "./artifacts.js";
+import { enhanceArtifacts, openModelFile } from "./artifacts.js";
 import { learnAndShow } from "./lessons.js";
 import { addRunButtons } from "./coderun.js";
 import { imageResult, openLightbox, progressLine } from "./images.js";
@@ -76,6 +76,17 @@ function fileChip(file) {
       ...file, url: file.meta.type === "scan" ? previewUrl(file) : file.url,
       meta: { request: file.name, width: file.meta.width, height: file.meta.height },
     }));
+    return btn;
+  }
+  if (file.meta?.type === "model3d") {
+    // 3D-модель: клик — открыть в просмотрщике (вращать, смотреть размеры, экспортировать)
+    const btn = el("button", "file-chip is-model");
+    btn.type = "button";
+    btn.title = `Открыть «${file.name}» в 3D-просмотрщике`;
+    const text = el("span", "f-text");
+    text.append(el("span", "f-name", file.name), el("span", "f-info", describeFile(file)));
+    btn.append(el("span", "f-icon", "🧊"), text);
+    btn.addEventListener("click", () => openModelFile(file));
     return btn;
   }
   const a = el("a", "file-chip");

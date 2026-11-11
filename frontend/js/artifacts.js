@@ -21,6 +21,10 @@ const HTML_DOCUMENT = /<!doctype|<html|<body|<canvas|<script/i;
 
 // Библиотеки, которые лежат локально и подставляются вместо CDN-ссылок
 const LIBS = [
+  // Дополнения Three.js (управление камерой, экспорт, загрузчики) — раньше ядра: в их адресе тоже есть «three@»
+  { name: "Three.js (дополнения)", file: "three-addons.js",
+    match: /three-addons\.js$|examples\/js\/(controls|loaders|exporters)\/|OrbitControls\.js|(STL|OBJ|GLTF)(Loader|Exporter)\.js/i },
+  { name: "Набор 3D", file: "kit3d.js", match: /kit3d\.js$/i },
   { name: "Three.js", file: "three.min.js", match: /three(\.module)?(\.min)?\.js(\?.*)?$|three@|\/three\.js\/|three\/build/i },
   { name: "Chart.js", file: "chart.umd.js", match: /chart(\.umd)?(\.min)?\.js(\?.*)?$|chart\.js@|\/chart\.js\//i },
 ];
@@ -40,6 +44,11 @@ export function setFixHandler(fn) {
 // ---------- распознавание ----------
 
 export function artifactTitle(lang, code) {
+  if (lang === "3d") {
+    // Первая строка модели: «// title: Держатель для телефона»
+    const m = code.match(/^\s*\/\/\s*(?:title|название)\s*:\s*(.{1,120})$/im);
+    return m ? m[1].trim() : "3D-модель";
+  }
   if (lang === "html" || lang === "svg") {
     const m = code.match(/<title[^>]*>([^<]{1,120})<\/title>/i);
     if (m && m[1].trim()) return m[1].trim();
@@ -49,6 +58,7 @@ export function artifactTitle(lang, code) {
 }
 
 function isArtifact(lang, code) {
+  if (lang === "3d") return code.trim().length > 0;
   if (lang === "html") return HTML_DOCUMENT.test(code);
   if (lang === "svg") return code.toLowerCase().includes("<svg");
   return lang === "mermaid" && code.trim().length > 0;
@@ -58,6 +68,8 @@ const KIND = {
   html: { icon: "🎮", label: "HTML", open: "▶ Запустить", ext: "html", mime: "text/html" },
   svg: { icon: "🖼️", label: "SVG", open: "Открыть", ext: "svg", mime: "image/svg+xml" },
   mermaid: { icon: "🧭", label: "Схема Mermaid", open: "Открыть", ext: "svg", mime: "image/svg+xml" },
+  "3d": { icon: "🧊", label: "3D-модель", open: "▶ Открыть 3D", ext: "js", mime: "text/javascript" },
+  model: { icon: "🧊", label: "Файл 3D-модели", open: "▶ Открыть 3D", ext: "", mime: "" },
 };
 
 function lineCount(code) {
@@ -257,6 +269,7 @@ export async function buildSrcdoc(code, token) {
     "window.addEventListener('unhandledrejection',function(e){var r=e.reason;s({type:'error',message:'Promise: '+(r&&r.message||r),line:0})});" +
     "document.addEventListener('securitypolicyviolation',function(e){s({type:'blocked',url:String(e.blockedURI||''),directive:e.violatedDirective})});" +
     "window.addEventListener('load',function(){s({type:'ready'})});" +
+    "window.__artifactSend=s;window.__artifactToken=T;" + // для 3D-набора: скачивание файлов и приём модели
     "})();</script>";
   let injected = `<meta http-equiv="Content-Security-Policy" content="${CSP}"><meta charset="utf-8">${reporter}`;
   for (const lib of libs) injected += `<script>${await libText(lib.file)}\n</script>`;
@@ -286,11 +299,19 @@ function versionsOf(key) {
 
 /** Открыть артефакт карточки в панели. */
 export function openArtifact(card) {
-  const art = card.artifact;
+  openArt(card.artifact, card);
+}
+
+/** Открыть свой файл 3D-модели (STL/OBJ/GLB из вложений) в просмотрщике. */
+export function openModelFile(file) {
+  openArt({ lang: "model", title: file.name, code: "", key: `model:${file.id}`, file, truncated: false }, null);
+}
+
+function openArt(art, card) {
   const versions = versionsOf(art.key);
   current = { art, index: Math.max(0, versions.indexOf(card)) };
   document.querySelectorAll(".artifact-card.is-open").forEach((c) => c.classList.remove("is-open"));
-  card.classList.add("is-open");
+  card?.classList.add("is-open");
   document.body.classList.add("artifact-open");
   panel().hidden = false;
 
@@ -302,8 +323,11 @@ export function openArtifact(card) {
   select.value = String(current.index);
   select.hidden = versions.length < 2;
 
-  showTab($("ap-tabs").dataset.tab || "view");
-  $("ap-restart").hidden = art.lang !== "html";
+  // У файла модели нет «кода» — только просмотр
+  $("ap-tabs").querySelector("[data-tab=code]").hidden = art.lang === "model";
+  $("ap-download").hidden = art.lang === "model";
+  showTab(art.lang === "model" ? "view" : $("ap-tabs").dataset.tab || "view");
+  $("ap-restart").hidden = !["html", "3d", "model"].includes(art.lang);
 }
 
 function showTab(tab) {
@@ -318,7 +342,8 @@ function showTab(tab) {
 function renderCode() {
   const code = $("ap-code-body");
   code.textContent = current.art.code;
-  code.className = current.art.lang === "mermaid" ? "language-plaintext" : "language-xml";
+  code.className = current.art.lang === "mermaid" ? "language-plaintext"
+    : current.art.lang === "3d" ? "language-javascript" : "language-xml";
   delete code.dataset.highlighted;
   if (typeof hljs !== "undefined" && current.art.code.length < 200_000) hljs.highlightElement(code);
 }
@@ -328,6 +353,7 @@ async function renderView() {
   const { art } = current;
   stopRun();
   view.innerHTML = "";
+  delete panel().dataset.model; // размеры прошлой 3D-модели больше не актуальны
   clearBars();
   errorsShown = 0;
   if (art.truncated) {
@@ -354,10 +380,11 @@ async function renderView() {
     }
     return;
   }
-  // HTML — в песочнице
+  // HTML, 3D-модель, файл модели — в песочнице
   runToken = Math.random().toString(36).slice(2);
-  const built = await buildSrcdoc(art.code, runToken);
-  runInfo = built;
+  const page = art.lang === "3d" ? make3dPage(art) : art.lang === "model" ? makeModelPage(art) : { html: art.code, offset: 0 };
+  const built = await buildSrcdoc(page.html, runToken);
+  runInfo = { ...built, offset: page.offset };
   for (const note of built.notes) addBar("warn", note);
   const frame = document.createElement("iframe");
   frame.className = "ap-frame";
@@ -389,6 +416,54 @@ function addBar(level, text, fixRequest) {
   $("ap-bars").append(bar);
 }
 
+// ---------- 3D (этап 15б) ----------
+
+const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+/**
+ * Страница 3D-модели: Three.js + дополнения + наш набор (kit3d.js), затем код модели и «показать».
+ * offset — сколько строк обёртки стоит перед кодом модели: ошибку «строка 25 страницы»
+ * пересчитываем в «строка 3 кода модели».
+ */
+function make3dPage(art) {
+  const head = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(art.title)}</title></head><body>\n` +
+    `<script src="three.js"></script>\n<script src="three-addons.js"></script>\n<script src="kit3d.js"></script>\n<script>\n`;
+  // Код модели в отдельном <script>: если он упадёт, следующий скрипт всё равно покажет, что успело построиться
+  const html = head + art.code.replace(/<\/script/gi, "<\\/script") + "\n</script>\n<script>window.__kitFinish()</script>\n</body></html>";
+  return { html, offset: (head.match(/\n/g) || []).length };
+}
+
+/** Просмотрщик своего файла: набор ждёт, пока родитель передаст байты файла (сеть в песочнице закрыта). */
+function makeModelPage(art) {
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(art.title.replace(/\.[^.]+$/, ""))}</title></head><body>\n` +
+    `<script src="three.js"></script>\n<script src="three-addons.js"></script>\n<script src="kit3d.js"></script>\n` +
+    "<script>window.__kitWaitFile()</script>\n</body></html>";
+  return { html, offset: 0 };
+}
+
+async function sendModelFile(frame) {
+  const file = current?.art.file;
+  if (!file) return;
+  const format = file.meta?.format || file.name.split(".").pop().toLowerCase();
+  try {
+    const buffer = await (await fetch(file.url)).arrayBuffer();
+    frame.contentWindow.postMessage({ __kitFile: runToken, format, buffer }, "*", [buffer]);
+  } catch (e) {
+    addBar("error", `Не удалось загрузить файл: ${e.message}`);
+  }
+}
+
+/** Скачивание из песочницы (STL/OBJ/GLB): у изолированной страницы нет права скачивать — делаем это мы. */
+function saveFromSandbox(d) {
+  const name = String(d.name || "model").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 120);
+  const blob = new Blob([d.data], { type: d.mime || "application/octet-stream" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 // Сообщения из песочницы: ошибки, заблокированные запросы, «загрузилось»
 window.addEventListener("message", (e) => {
   const frame = $("ap-view")?.querySelector("iframe");
@@ -396,9 +471,16 @@ window.addEventListener("message", (e) => {
   if (!frame || e.source !== frame.contentWindow || !d || d.__artifact !== runToken || !current) return;
   if (d.type === "ready") {
     panel().dataset.state = "ready";
+  } else if (d.type === "download") {
+    saveFromSandbox(d);
+  } else if (d.type === "need-file") {
+    sendModelFile(frame);
+  } else if (d.type === "model3d") {
+    panel().dataset.model = JSON.stringify({ size: d.size, triangles: d.triangles }); // для тестов и подсказок
   } else if (d.type === "error" && errorsShown < 3) {
     errorsShown++;
-    const line = d.line ? runInfo.lineMap(d.line) : 0;
+    let line = d.line ? runInfo.lineMap(d.line) : 0;
+    if (line && runInfo.offset) line = line > runInfo.offset ? line - runInfo.offset : null; // строка в коде модели
     const where = d.line ? (line === null ? " (в подключённой библиотеке)" : ` (строка ${line})`) : "";
     const version = versionsOf(current.art.key).length > 1 ? ` (версия ${current.index + 1})` : "";
     addBar("error", `Ошибка: ${d.message}${where}`,

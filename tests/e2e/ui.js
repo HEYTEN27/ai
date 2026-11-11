@@ -17,8 +17,10 @@ const assert = (c, m) => { if (!c) { throw new Error('FAIL: ' + m); } console.lo
   assert(await page.textContent('.conn-text') === 'Ollama 0.34.4-fake', 'статус Ollama');
   assert(await page.title() === 'Джарвис', 'имя ассистента во вкладке');
   // Тема HUD: приветствие по времени суток печатается по буквам, имя — в подзаголовке
-  await page.waitForFunction(() => document.querySelector('#greeting').textContent.endsWith(', сэр.'));
-  assert(/^(Доброе утро|Добрый день|Добрый вечер|Доброй ночи), сэр\.$/.test(await page.textContent('#greeting')), 'приветствие «…, сэр.»');
+  // Приветствие «печатается» и может начаться заново (пришли настройки) — ждём полный текст
+  await page.waitForFunction(() => /^(Доброе утро|Добрый день|Добрый вечер|Доброй ночи), сэр\.$/
+    .test(document.querySelector('#greeting').textContent), null, { timeout: 10000 });
+  assert(true, 'приветствие «…, сэр.»');
   assert((await page.textContent('#greeting-sub')).startsWith('Джарвис на связи'), 'подзаголовок с именем');
   await page.waitForFunction(() => document.querySelectorAll('#model-select option').length >= 3);
   const options = await page.$$eval('#model-select option', o => o.map(x => x.textContent));
